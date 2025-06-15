@@ -50,6 +50,9 @@ app.use(cors({
   credentials: true
 }));
 
+// 2) Add this line *immediately* after your `app.use(cors(...))`:
+app.options('*', cors()); 
+
 app.use(express.json());
 app.use('/prompts', express.static(path.join(__dirname, 'prompts')));
 
@@ -719,6 +722,7 @@ app.post('/api/scrape-url', async (req, res) => {
         lease_type: leaseType,
         workflow_status: workflowStatus,
         tenant_type: tenantType,
+        popup_url: popupUrl,
       }, { merge: true });
 
       console.log(`[🔥 Firebase] Document saved to 'compare_result': ${contractId}`);
