@@ -26,8 +26,7 @@ yarn-error.log*
 server/*-sdk-*.json
 server/gen-lang-client-*.json
 
-# But do track this Firebase key
-!server/loi-checker-firebase-adminsdk-fbsvc-e5de01d327.json
+
 
 
 # But do not ignore your manifest files

@@ -149,9 +149,13 @@ app.post('/api/process-pdf', async (req, res) => {
 
 
 // Firebase Admin Init
+/*
 const serviceAccount = JSON.parse(
   fs.readFileSync(path.join(__dirname, './loi-checker-firebase-adminsdk-fbsvc-e5de01d327.json'), 'utf8')
 );
+*/
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
