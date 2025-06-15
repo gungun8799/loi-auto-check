@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { BarChartBig, RefreshCcw } from 'lucide-react';
 import { Bar } from 'react-chartjs-2';
 import * as XLSX from 'xlsx';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 
 
@@ -19,6 +18,7 @@ import {
 } from 'chart.js';
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Title);
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 function LOIDashboard({ user }) {
   const navigate = useNavigate(); 
@@ -26,6 +26,7 @@ function LOIDashboard({ user }) {
   const [filteredContracts, setFilteredContracts] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [weekStats, setWeekStats] = useState({});
+  
   // at the top of LOIDashboard(), right after your other useState calls:
 const [editingWorkflowFor, setEditingWorkflowFor] = useState(null);
   const [refreshingContracts, setRefreshingContracts] = useState({});
