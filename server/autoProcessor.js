@@ -177,10 +177,10 @@ console.log(`[🔖 Extracted Contract Number] ${extractedContractNumber}`);
 console.log(`[🔐 Logging in to Simplicity as ${process.env.SIMPLICITY_USER}]`);
 try {
   await axios.post(
-    `${BASE_URL}/api/login`,
+    `${BASE_URL}/api/scrape-login`,
     {
       systemType: 'simplicity',
-      email:   process.env.SIMPLICITY_USER,
+      username:   process.env.SIMPLICITY_USER,
       password:   process.env.SIMPLICITY_PASS,
     },
     { withCredentials: true }
