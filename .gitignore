@@ -1,5 +1,3 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
 /node_modules/
 /.pnp/
@@ -23,11 +21,14 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Ignore downloaded service-account JSON files
+# Ignore all JSON under server except package manifests
+server/*.json
+!server/package.json
+!server/package-lock.json
+
+# Ignore any base64 dumps
+server/*.base64.txt
+
+# Ignore downloaded service-account JSONs by name pattern
 server/*-sdk-*.json
 server/gen-lang-client-*.json
-
-# But do NOT ignore your package manifests
-!server/package.json
-!server/package-lock.jsonserver/*.json
-server/*.base64.txt
