@@ -67,7 +67,7 @@ const [exportTo, setExportTo] = useState('');     // e.g. "2025-06-10"
     // Fetch contracts + lead statuses
     const fetchData = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/get-compare-results`);
+        const res = await axios.get(`/api/get-compare-results`);
         if (res.data.success && Array.isArray(res.data.data)) {
           const rawContracts = res.data.data;
           setContracts(rawContracts);
@@ -75,7 +75,7 @@ const [exportTo, setExportTo] = useState('');     // e.g. "2025-06-10"
           computeWeeklyStats(rawContracts);
         }
   
-        const leadRes = await axios.get(`${API_URL}/api/get-lead-statuses`);
+        const leadRes = await axios.get(`/api/get-lead-statuses`);
         if (leadRes.data.success && leadRes.data.statuses) {
           setLeadStatuses(leadRes.data.statuses);
         }
@@ -374,7 +374,7 @@ const exportBetween = (fromRaw, toRaw) => {
   const handleLeadStatusChange = async (contractId, status) => {
     setLeadStatuses(prev => ({ ...prev, [contractId]: status }));
     try {
-      await axios.post('${API_URL}/api/update-lead-status', {
+      await axios.post('/api/update-lead-status', {
         contractNumber: contractId.replace(/_/g, '/'),
         leadStatus: status,
       });
@@ -386,7 +386,7 @@ const exportBetween = (fromRaw, toRaw) => {
 
   const forceProcessFile = async (contractNumber) => {
     try {
-      const res = await axios.post(`${API_URL}/api/force-process-contract`, {
+      const res = await axios.post(`/api/force-process-contract`, {
         contractNumber
       });
   
@@ -394,7 +394,7 @@ const exportBetween = (fromRaw, toRaw) => {
         alert('✅ Forced processing complete.');
   
         // Re-fetch the latest compare results and refresh state
-        const getRes = await axios.get(`${API_URL}/api/get-compare-results`);
+        const getRes = await axios.get(`/api/get-compare-results`);
         if (getRes.data.success && Array.isArray(getRes.data.data)) {
           setContracts(getRes.data.data);
           setFilteredContracts(getRes.data.data);
@@ -419,7 +419,7 @@ const exportBetween = (fromRaw, toRaw) => {
     try {
       // Trigger backend auto-process
       const res = await axios.post(
-        `${API_URL}/api/auto-process-pdf-folder`,
+        `/api/auto-process-pdf-folder`,
         { folderPath: sharepointPath }
       );
   
@@ -488,7 +488,7 @@ const handleTodaysReport = () => {
   
     // 2. Send to backend
     try {
-      await axios.post('${API_URL}/api/update-workflow-status', {
+      await axios.post('/api/update-workflow-status', {
         contractNumber,
         workflowStatus: chosenStatus
       });
@@ -575,7 +575,7 @@ const getContractDate = (ts) => {
   
     try {
       const { data } = await axios.post(
-        '${API_URL}/api/refresh-contract-status',
+        '/api/refresh-contract-status',
         { contractNumber }
       );
   
@@ -840,7 +840,7 @@ const getContractDate = (ts) => {
                 className={styles.buttonOpenPopup}
                 onClick={() => {
                   axios
-                    .post('${API_URL}/api/open-popup-tab', {
+                    .post('/api/open-popup-tab', {
                       systemType:      'simplicity',
                       contractNumber:  contract.contract_number.replace(/_/g, '/'),
                       username:        user.email,    // ← pass logged‐in email
