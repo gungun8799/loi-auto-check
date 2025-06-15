@@ -31,27 +31,30 @@ const app = express();
 const upload = multer({ dest: 'uploads/' });
 
 // read comma-separated list of allowed origins from env
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = process.env.NODE_ENV === 'development'
 const allowedOrigins = isDev
   ? ['http://localhost:3000']
   : (process.env.FRONTEND_URLS || '')
       .split(',')
       .map(u => u.trim())
-      .filter(Boolean);
+      .filter(Boolean)
 
-console.log('⚙️  CORS allowed origins:', allowedOrigins);
+console.log('⚙️  CORS allowed origins:', allowedOrigins)
 
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    cb(new Error(`CORS policy: origin ${origin} not allowed`));
+    // allow no-origin (e.g. mobile apps / curl) or any of your listed domains
+    if (!origin || allowedOrigins.includes(origin)) {
+      return cb(null, true)
+    }
+    cb(new Error(`CORS policy: origin ${origin} not allowed`))
   },
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
-  credentials: true
-}));
+  credentials: true,
+  optionsSuccessStatus: 200     // ensure older browsers get a 200
+}))
 
 // 2) Add this line *immediately* after your `app.use(cors(...))`:
-app.options('*', cors()); 
 
 app.use(express.json());
 app.use('/prompts', express.static(path.join(__dirname, 'prompts')));
