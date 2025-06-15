@@ -2844,6 +2844,8 @@ app.post('/api/contract-classify', async (req, res) => {
 
 
 app.post('/api/scrape-url-test', async (req, res) => {
+  console.log('→ SIMPLICITY_USER=', process.env.SIMPLICITY_USER);
+console.log('→ SIMPLICITY_PASS=', process.env.SIMPLICITY_PASS && '*****');
   const { systemType, username, password, contractNumber } = req.body;
   // fallback if promptKey is missing or empty
   const promptKey = (req.body.promptKey && req.body.promptKey.trim())
