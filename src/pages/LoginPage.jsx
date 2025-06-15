@@ -3,8 +3,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Pages.css'; // adjust path if needed
 
-// point this at your backend (e.g. "http://localhost:5001" or an env var)
-const apiUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5001';
+// point this at your backend (e.g. "${API_URL}" or an env var)
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 export default function LoginPage({ setUser }) {
   const [email, setEmail] = useState('');
@@ -12,7 +12,7 @@ export default function LoginPage({ setUser }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+  const API_URL = process.env.REACT_APP_API_URL || '${API_URL}';
 
 
   async function handleLogin(e) {
