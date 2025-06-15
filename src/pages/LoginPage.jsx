@@ -21,7 +21,7 @@ export default function LoginPage({ setUser }) {
     setError('');
     try {
       console.log('🔐 Attempting login with:', { email, password });
-      const res = await fetch(`${apiUrl}/api/login`, {
+      const res = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
