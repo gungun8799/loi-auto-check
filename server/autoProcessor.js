@@ -116,14 +116,14 @@ async function processOneContract(filename) {
     ocrForm.append('pages', 'all');
 
      const ocrRes = await axios.post(
-         `/api/extract-text-only`,
+         `${BASE_URL}/api/extract-text-only`,
          ocrForm,
          { headers: ocrForm.getHeaders() }
        );
     const ocrText = ocrRes.data?.text;
     if (!ocrText) throw new Error('No OCR text received from /api/extract-text-only');
 
-    const classifyRes = await axios.post(`/api/contract-classify`, { ocrText });
+    const classifyRes = await axios.post(`${BASE_URL}/api/contract-classify`, { ocrText });
     const contractType = classifyRes.data?.contractType || 'unknown';
     let promptKey = 'LOI_permanent_fixed_fields';
     if (contractType === 'service_express') {
@@ -133,7 +133,7 @@ async function processOneContract(filename) {
     console.log(`[📌 Prompt selected based on contract type] ${promptKey}`);
 
     // ─── Step 2: Direct API extract (bypass the UI entirely) ───────────────
-    console.log('[🔁 Calling /api/extract-text directly for OCR & Gemini]');
+    console.log('[🔁 Calling ${BASE_URL}/api/extract-text directly for OCR & Gemini]');
     const extractForm = new FormData();
     // Append the PDF under “files” (match upload.array('files'))
     extractForm.append(
@@ -149,7 +149,7 @@ async function processOneContract(filename) {
     let extractRes
     try {
       extractRes = await axios.post(
-        `/api/extract-text`,
+        `${BASE_URL}/api/extract-text`,
         extractForm,
         { headers: extractForm.getHeaders() }
       )
@@ -178,7 +178,7 @@ async function processOneContract(filename) {
 
     // 2.3) Auto‐scrape Simplicity for the extracted contract
     console.log(`[🔐 Auto-scrape for ${extractedContractNumber}]`)
-    const scrapeRes = await axios.post(`/api/scrape-url`, {
+    const scrapeRes = await axios.post(`${BASE_URL}/api/scrape-url`, {
       systemType:      'simplicity',
       promptKey,
       contractNumber:  extractedContractNumber,
@@ -203,7 +203,7 @@ async function processOneContract(filename) {
 
     // 2.5) Gemini Compare
     const formattedSources = { pdf: parsedPdf, web: parsedWeb }
-    const cmpRes = await axios.post(`/api/gemini-compare`, {
+    const cmpRes = await axios.post(`${BASE_URL}/api/gemini-compare`, {
        
       formattedSources,
       promptKey,
@@ -231,7 +231,7 @@ async function processOneContract(filename) {
 
 
     // 2.7) Document Validation
-    const docValRes = await axios.post(`/api/validate-document`, {
+    const docValRes = await axios.post(`${BASE_URL}/api/validate-document`, {
       extractedData: parsedPdf,
       promptKey,
     })
@@ -239,21 +239,21 @@ async function processOneContract(filename) {
       .replace(/^```json\s*/i, '')
       .replace(/```$/, '')
     const validationResult = JSON.parse(val)
-    await axios.post(`/api/save-validation-result`, {
+    await axios.post(`${BASE_URL}/api/save-validation-result`, {
       contractNumber:    contractId,
       validationResult,
     })
     console.log('[✅ Saved validation_result]')
 
     // 2.8) Web Validation
-    const webValRes = await axios.post(`/api/web-validate`, {
+    const webValRes = await axios.post(`${BASE_URL}/api/web-validate`, {
       contractNumber:  extractedContractNumber,
       extractedData:   parsedWeb,
       promptKey,
     })
     const webValidation = webValRes.data.validationResult
     if (Array.isArray(webValidation)) {
-      await axios.post(`/api/save-validation-result`, {
+      await axios.post(`${BASE_URL}/api/save-validation-result`, {
         contractNumber:    contractId,
         validationResult:  webValidation,
       })
@@ -272,7 +272,7 @@ const fullPayload = {
   webValidationResult: webValidation,  // your web‐validation array
   popupUrl
 };
-await axios.post(`/api/save-compare-result`, fullPayload);
+await axios.post(`${BASE_URL}/api/save-compare-result`, fullPayload);
 console.log('[✅ Saved compare + validations together]');
 
     return true
