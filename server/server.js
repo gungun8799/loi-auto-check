@@ -21,6 +21,7 @@ import dotenv from 'dotenv';
 dotenv.config({
   path: `.env.${process.env.NODE_ENV || 'development'}`
 });
+const PUPPETEER_SERVICE_URL = process.env.PUPPETEER_SERVICE_URL;
 const FOLDER_PATH = path.join(process.cwd(), 'contracts');
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -1161,35 +1162,42 @@ app.post('/api/scrape-login', async (req, res) => {
 
   try {
     let browser, page;
-
-    // 1) Reuse session if we already have one
+  
+    // 👉 If you have a remote Puppeteer service, delegate the login there
+    if (process.env.PUPPETEER_SERVICE_URL) {
+      const { data } = await axios.post(
+        `${process.env.PUPPETEER_SERVICE_URL}/api/scrape-login`,
+        { systemType, username, password }
+      );
+      // mirror your existing response shape
+      return res.status(data.success ? 200 : 401).json(data);
+    }
+  
+    // ─── Otherwise reuse or launch a local Puppeteer session ─────────────────
     if (browserSessions.has(systemType)) {
       ({ browser, page } = browserSessions.get(systemType));
     } else {
       console.log(`[🔑 Launching new Puppeteer session for ${systemType}]`);
-    
+      
       const isProd = process.env.NODE_ENV === 'production';
       const launchOptions = {
         headless: isProd,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          ...(isProd ? [
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--start-fullscreen'
-          ] : [])
+          ...(isProd
+            ? ['--disable-dev-shm-usage', '--disable-gpu', '--start-fullscreen']
+            : []
+          )
         ],
-        // In production, point to the Render‐cached Chrome; in dev you can omit or override
-        ...(isProd
-          ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome' }
-          : {}
-        )
+        ...(isProd && {
+          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
+        })
       };
-    
+      
       browser = await puppeteer.launch(launchOptions);
       page    = await browser.newPage();
-    
+      
       // store for reuse
       browserSessions.set(systemType, { browser, page });
 

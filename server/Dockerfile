@@ -1,21 +1,26 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# Use Puppeteer’s pre-baked image so Chrome’s already installed
-# ─────────────────────────────────────────────────────────────────────────────
-FROM ghcr.io/puppeteer/puppeteer:19.7.2
+FROM node:18-alpine
 
-# Skip downloading Chromium again and point to the system Chrome
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
-
-# Set your working directory
+# set your working dir
 WORKDIR /usr/src/app
 
-# Copy package.json, install deps
+# copy package manifest first so we can npm install 
 COPY package*.json ./
-RUN npm ci
 
-# Copy the rest of your code
+# install deps
+RUN npm ci --production
+
+# copy the rest of the code
 COPY . .
 
-# Start your server
+# pre-create the directories you’ll need at runtime
+RUN mkdir -p contracts processed \
+ && chmod -R 755 contracts processed \
+ # if you switch to the `node` user below, make sure it's the owner:
+ && chown -R node:node contracts processed
+
+# switch away from root for best practice
+USER node
+
+# expose + start
+EXPOSE 5001
 CMD ["node", "server.js"]
