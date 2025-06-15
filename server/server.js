@@ -32,18 +32,22 @@ const app = express();
 const upload = multer({ dest: 'uploads/' });
 
 // read comma-separated list of allowed origins from env
-const allowedOrigins = (process.env.FRONTEND_URLS || '')
-  .split(',')
-  .map(u => u.trim())
-  .filter(u => u);
+// replace your cors block in server.js with:
+
+const isDev = process.env.NODE_ENV === 'development';
+const allowedOrigins = isDev
+  ? ['http://localhost:3000']
+  : (process.env.FRONTEND_URLS || '')
+      .split(',')
+      .map(u => u.trim())
+      .filter(Boolean);
+
+console.log('⚙️  CORS allowed origins:', allowedOrigins);
 
 app.use(cors({
-  origin: (incomingOrigin, callback) => {
-    // allow requests with no origin (e.g. mobile apps, curl) or matching one of your URLs
-    if (!incomingOrigin || allowedOrigins.includes(incomingOrigin)) {
-      return callback(null, true);
-    }
-    callback(new Error(`CORS policy: origin ${incomingOrigin} not allowed`));
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS policy: origin ${origin} not allowed`));
   },
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   credentials: true
