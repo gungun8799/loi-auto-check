@@ -12,6 +12,9 @@ import xlsx from 'xlsx';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import archiver from 'archiver';  // at the top with your other imports
+import { promisify } from 'util';
+import fsPromises from 'fs/promises';
 
 
 import dotenv from 'dotenv';
@@ -28,8 +31,7 @@ const browserSessions = new Map();
 
 // Env and Express setup
 const app = express();
-const upload = multer({ dest: 'uploads/' });
-
+const upload = multer({ dest: 'tmp_uploads/' });
 // read comma-separated list of allowed origins from env
 const isDev = process.env.NODE_ENV === 'development'
 const allowedOrigins = isDev
@@ -90,6 +92,86 @@ app.use(
   '/prompts',
   express.static(path.join(__dirname, 'prompts'))
 );
+
+// List the files in a folder
+app.get('/api/list-files', async (req, res) => {
+  try {
+    const folder = req.query.folder;
+    if (!['contracts','processed'].includes(folder)) {
+      return res.status(400).json({ error: 'Invalid folder' });
+    }
+    const dir = path.join(process.cwd(), folder);
+    const files = await fsPromises.readdir(dir);
+    // only PDFs
+    const pdfs = files.filter(f => f.toLowerCase().endsWith('.pdf'));
+    res.json({ files: pdfs });
+  } catch (err) {
+    console.error('list-files error', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/upload-file', upload.array('files'), async (req, res) => {
+  try {
+    const targetDir = path.join(process.cwd(), req.query.path || '', '');
+    // ensure directory exists
+    await fsPromises.mkdir(targetDir, { recursive: true });
+
+    // move each uploaded file into targetDir
+    for (let file of req.files) {
+      const dest = path.join(targetDir, file.originalname);
+      await fsPromises.rename(file.path, dest);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[UPLOAD-FILE Error]', err);
+    // clean up any temp files
+    for (let file of req.files || []) {
+      try { await fsPromises.unlink(file.path); } catch {}
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+// Helper to list a directory
+app.get('/api/list-directory', async (req, res) => {
+  const base = process.cwd(); // or wherever your folders live
+  const requested = req.query.path || '';
+  const full = path.join(base, requested);
+  try {
+    const items = await fs.promises.readdir(full, { withFileTypes: true });
+    const entries = items.map(dirent => ({
+      name: dirent.name,
+      isDirectory: dirent.isDirectory(),
+    }));
+    res.json({ entries });
+  } catch (err) {
+    res.status(500).json({ message: 'Unable to list directory', error: err.message });
+  }
+});
+
+// Download a single file
+app.get('/api/download-file', async (req, res) => {
+  const base = process.cwd();
+  const filePath = path.join(base, req.query.path);
+  res.download(filePath);
+});
+
+// Zip & download a folder
+app.get('/api/download-folder', async (req, res) => {
+  const base = process.cwd();
+  const folderPath = path.join(base, req.query.path || '');
+  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  res.attachment(`${path.basename(folderPath)}.zip`);
+  archive.pipe(res);
+
+  archive.directory(folderPath, false);
+  archive.finalize();
+});
+
+
 
 // Add this route for checking file metadata and saving to Firebase
 app.post('/api/process-pdf-folder', async (req, res) => {
@@ -394,6 +476,36 @@ app.post('/api/extract-text', upload.array('files'), async (req, res) => {
   console.log(`[📤 Firebase] Document saved as ID: ${docId}`);
   res.json({ success: true, text: combinedText, geminiOutput: geminiText });
 });
+
+// right after your other routes, e.g. near /list-directory and /download-file
+app.post(
+  '/api/upload-file',
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      const targetPath = req.query.path || '';      // e.g. "contracts" or "contracts/subfolder"
+      const file = req.file;                         // from multer
+      if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      // compute where to move it
+      const destDir = path.join(__dirname, targetPath);
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
+
+      // move from multer's temp upload to your folder
+      const finalPath = path.join(destDir, file.originalname);
+      fs.renameSync(file.path, finalPath);
+
+      res.json({ success: true, path: `${targetPath}/${file.originalname}` });
+    } catch (err) {
+      console.error('Upload error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
 
 // --- LOGIN endpoint ---
 app.post('/api/login', async (req, res) => {

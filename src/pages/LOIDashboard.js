@@ -24,6 +24,8 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 const api = axios.create({
   baseURL: `${API_URL}/api`,
 });
+
+
 function LOIDashboard({ user }) {
   const navigate = useNavigate(); 
   const [contracts, setContracts] = useState([]);
@@ -47,6 +49,10 @@ const [editingWorkflowFor, setEditingWorkflowFor] = useState(null);
    navigate('/login', { replace: true });
  };
 
+ const [showExplorer, setShowExplorer] = useState(false);
+const [contractsFolderFiles, setContractsFolderFiles] = useState([]);
+const [processedFolderFiles, setProcessedFolderFiles] = useState([]);
+
   const [exportFrom, setExportFrom] = useState(''); // e.g. "2025-06-01"
 const [exportTo, setExportTo] = useState('');     // e.g. "2025-06-10"
     // ─── New state hooks for “export from/to” ─────────────────────────────────
@@ -66,6 +72,12 @@ const [exportTo, setExportTo] = useState('');     // e.g. "2025-06-10"
   // Track online/offline
    const [isOnline, setIsOnline] = useState(navigator.onLine);
    
+   useEffect(() => {
+    if (!showExplorer) return;
+    api.get('/list-files?folder=contracts').then(res => setContractsFolderFiles(res.data.files));
+    api.get('/list-files?folder=processed').then(res => setProcessedFolderFiles(res.data.files));
+  }, [showExplorer]);
+
    useEffect(() => {
     // Fetch contracts + lead statuses
     const fetchData = async () => {
@@ -615,8 +627,24 @@ const getContractDate = (ts) => {
     }
   };
 
+
+  
   return (
     <div className={styles.dashboardWrapper}>
+      {/* File Explorer Button */}
+      <div className={styles.dashboardWrapper}>
+      {/* … existing buttons/filters … */}
+
+
+
+      {showExplorer && (
+        <FileExplorer onClose={() => setShowExplorer(false)} />
+      )}
+
+      <table className={styles.resultTable}>
+        {/* … rest of your table … */}
+      </table>
+    </div>
   {/* ─── Logout button ─────────────────────────────────────────────────── */}
   <div style={{ textAlign: 'right', marginBottom: '1rem' }}>
     <button className={styles.logoutButton} onClick={handleLogout}>
@@ -742,6 +770,25 @@ const getContractDate = (ts) => {
   >
     Today’s Report
   </button>
+
+  <button
+    onClick={() => setShowExplorer(true)}
+    title="Open File Explorer"
+    style={{
+      height: '2rem',
+      width: '2rem',
+      padding: 0,
+      fontSize: '2.2rem',
+      lineHeight: 1,
+      background: 'transparent',
+      border: 'none',
+      cursor: 'pointer',
+      border: 'none',
+      marginBottom: '0.5rem',
+    }}
+  >
+    📂
+  </button>
 </div>
 </div>
 
@@ -756,240 +803,398 @@ const getContractDate = (ts) => {
       <th>Tenant Type</th>
       <th>Lead Status</th>
       <th>Summary</th>
-      <th>Simplicity Link</th>
       {user?.role !== 'user' && <th>Force Process</th>}
     </tr>
   </thead>
   <tbody>
-    {filteredContracts.map((contract, idx) => {
-      const status = isValid(contract) ? '✅ Passed' : '❌ Needs Review';
-      const rowId = contract.contract_number || `row-${idx}`;
+  {(() => {
+    const activeContracts = filteredContracts.filter(
+      c => (leadStatuses[c.contract_number] || '').toLowerCase() !== 'resolved'
+    );
+    const resolvedContracts = filteredContracts.filter(
+      c => (leadStatuses[c.contract_number] || '').toLowerCase() === 'resolved'
+    );
 
-      return (
-        <React.Fragment key={rowId}>
-          <tr>
+    
 
-            <td>{contract.contract_number || '—'}</td>
-            <td>{formatDate(contract.timestamp)}</td>
-            <td>{status}</td>
-            <td>
-              {editingWorkflowFor === contract.contract_number ? (
-                <select
-                  value={contract.workflow_status || ''}
-                  onChange={e => {
-                    handleWorkflowStatusChange(contract.contract_number, e.target.value);
-                    setEditingWorkflowFor(null);
-                  }}
-                  onBlur={() => setEditingWorkflowFor(null)}
-                  autoFocus
-                  className={styles.workflowSelect}
-                >
-                  <option value="">-- select status --</option>
-                  <option value="Accepted">Accepted</option>
-                  <option value="Reject">Reject</option>
-                  <option value="Pending">Pending Verification</option>
-                  <option value="Simplify need editing">Simplify need editing</option>
-                  <option value="LOI need editing">LOI need editing</option>
-                </select>
-              ) : (
-                <>
-                  {contract.workflow_status || '—'}
-                  {refreshingContracts[contract.contract_number] ? (
-                    <span className={styles.spinner} />
-                  ) : (
-                    <button
-                      className={styles.refreshIconButton}
-                      title="Refresh Status"
-                      onClick={() => refreshContractStatus(contract.contract_number)}
+    return (
+      <>
+        {/* Active rows */}
+        {activeContracts.map((contract, idx) => {
+          const status = isValid(contract) ? '✅ Passed' : '❌ Needs Review';
+          const rowId = contract.contract_number || `row-${idx}`;
+          return (
+            <React.Fragment key={rowId}>
+              <tr>
+                <td>{contract.contract_number || '—'}</td>
+                <td>{formatDate(contract.timestamp)}</td>
+                <td>{status}</td>
+                <td>
+                  {editingWorkflowFor === contract.contract_number ? (
+                    <select
+                      value={contract.workflow_status || ''}
+                      onChange={e => {
+                        handleWorkflowStatusChange(contract.contract_number, e.target.value);
+                        setEditingWorkflowFor(null);
+                      }}
+                      onBlur={() => setEditingWorkflowFor(null)}
+                      autoFocus
+                      className={styles.workflowSelect}
                     >
-                      <RefreshCcw size={14} />
-                    </button>
+                      <option value="">-- select status --</option>
+                      <option value="Accepted">Accepted</option>
+                      <option value="Reject">Reject</option>
+                      <option value="Pending">Pending Verification</option>
+                      <option value="Simplify need editing">Simplify need editing</option>
+                      <option value="LOI need editing">LOI need editing</option>
+                    </select>
+                  ) : (
+                    <>
+                      {contract.workflow_status || '—'}
+                      {refreshingContracts[contract.contract_number] ? (
+                        <span className={styles.spinner} />
+                      ) : (
+                        <button
+                          className={styles.refreshIconButton}
+                          title="Refresh Status"
+                          onClick={() => refreshContractStatus(contract.contract_number)}
+                        >
+                          <RefreshCcw size={14} />
+                        </button>
+                      )}
+                      <button
+                        className={styles.editWorkflowButton}
+                        title="Edit Workflow Status"
+                        onClick={() => setEditingWorkflowFor(contract.contract_number)}
+                      >
+                        ✏️
+                      </button>
+                    </>
                   )}
-                  <button
-                    className={styles.editWorkflowButton}
-                    title="Edit Workflow Status"
-                    onClick={() => setEditingWorkflowFor(contract.contract_number)}
+                </td>
+                <td>{contract.lease_type || '—'}</td>
+                <td>{contract.tenant_type || '—'}</td>
+                <td>
+                  <select
+                    value={leadStatuses[contract.contract_number] || ''}
+                    onChange={e => handleLeadStatusChange(contract.contract_number, e.target.value)}
+                    className={styles.leadStatusSelect}
                   >
-                    ✏️
+                    <option value="">Select Lead Status</option>
+                    <option value="Acknowledge">Acknowledge</option>
+                    <option value="In-progress">In-progress</option>
+                    <option value="Resolved">Resolved</option>
+                  </select>
+                </td>
+                <td>
+                  <button
+                    className={styles.expandButton}
+                    onClick={() => toggleDetails(rowId)}
+                  >
+                    {expandedId === rowId ? 'Hide' : 'View Details'}
                   </button>
-                </>
-              )}
-            </td>
-            <td>{contract.lease_type || '—'}</td>
-
-            <td>{contract.tenant_type || '—'}</td>
-            <td>
-              <select
-                value={leadStatuses[contract.contract_number] || ''}
-                onChange={e => handleLeadStatusChange(contract.contract_number, e.target.value)}
-                className={styles.leadStatusSelect}
-              >
-                <option value="">Select Lead Status</option>
-                <option value="Acknowledge">Acknowledge</option>
-                <option value="In-progress">In-progress</option>
-                <option value="Resolved">Resolved</option>
-              </select>
-            </td>
-            <td>
-              <button
-                className={styles.expandButton}
-                onClick={() => toggleDetails(rowId)}
-              >
-                {expandedId === rowId ? 'Hide' : 'View Details'}
-              </button>
-            </td>
-            <td>
-              <button
-                className={styles.buttonOpenPopup}
-                onClick={() => {
-                  api
-                    .post('/open-popup-tab', {
-                      systemType:      'simplicity',
-                      contractNumber:  contract.contract_number.replace(/_/g, '/'),
-                      username:        user.email,    // ← pass logged‐in email
-                      password:        user.password, // ← pass logged‐in password
-                    })
-                    .then(res => {
-                      if (res.data.success) {
-                        alert('✅ Popup opened. Please check Chrome.');
-                      } else {
-                        alert('❌ Failed to open popup.');
-                      }
-                    })
-                    .catch(err => {
-                      alert('❌ Error triggering popup tab.');
-                      console.error(err);
-                    });
-                }}
-              >
-                🧾 Open Contract Popup
-              </button>
-            </td>
-            {user?.role !== 'user' && (
-            <td>
-            <button
-              className={styles.forceProcessButton}
-              onClick={() => {
-                if (isProcessingAuto) {
-                  alert('⚠️ A process is already running. Please wait.');
-                  return;
-                }
-                forceProcessFile(contract.contract_number);
-              }}
-              disabled={isProcessingAuto}
-            >
-              🚀 Force Process
-            </button>
-            </td>
-          )}
-          </tr>
-
-          {expandedId === rowId && (
-            <tr>
-              <td colSpan={9}>
-                <div className={styles.detailsSection}>
-                  <h4>🔍 Compare Result</h4>
-                  <table className={styles.detailsTable}>
-                    <thead>
-                      <tr>
-                        <th>Field</th>
-                        <th>PDF</th>
-                        <th>Web</th>
-                        <th>Match</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(contract.compare_result || []).map((row, i) => (
-                        <tr key={i}>
-                          <td>{row.field}</td>
-                          <td>{row.pdf}</td>
-                          <td>{row.web}</td>
-                          <td>{row.match ? '✅' : '❌'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  <h4>🧠 PDF Validation Result</h4>
-                  <table className={styles.detailsTable}>
-                    <thead>
-                      <tr>
-                        <th>Field</th>
-                        <th>Value</th>
-                        <th>Valid</th>
-                        <th>Reason</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(contract.validation_result || []).map((row, i) => (
-                        <tr key={i}>
-                          <td>{row.field}</td>
-                          <td>{row.value}</td>
-                          <td>{row.valid ? '✅' : '❌'}</td>
-                          <td>{row.reason || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  <h4>🌐 Simplicity Validation Result</h4>
-                  <table className={styles.detailsTable}>
-                    <thead>
-                      <tr>
-                        <th>Field</th>
-                        <th>Value</th>
-                        <th>Valid</th>
-                        <th>Reason</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(contract.web_validation_result || []).map((row, i) => (
-                        <tr key={i}>
-                          <td>{row.field}</td>
-                          <td>{row.value}</td>
-                          <td>{row.valid ? '✅' : '❌'}</td>
-                          <td>{row.reason || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  {contract.meter_validation_result && contract.meter_validation_result.length > 0 && (
-                    <div style={{ marginTop: '2rem' }}>
-                      <h4>🌡 Meter Validation Result</h4>
-                      <table className={styles.detailsTable}>
-                        <thead>
-                          <tr>
-                            <th>Field</th>
-                            <th>Value</th>
-                            <th>Valid</th>
-                            <th>Reason</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {contract.meter_validation_result.map((row, i) => (
-                            <tr key={i}>
-                              <td>{row.field}</td>
-                              <td>{row.value ?? '—'}</td>
-                              <td>{row.valid ? '✅' : '❌'}</td>
-                              <td>{row.reason || '—'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                </td>
+                {user?.role !== 'user' && (
+                  <td>
+                    <button
+                      className={styles.forceProcessButton}
+                      onClick={() => {
+                        if (isProcessingAuto) {
+                          alert('⚠️ A process is already running. Please wait.');
+                          return;
+                        }
+                        forceProcessFile(contract.contract_number);
+                      }}
+                      disabled={isProcessingAuto}
+                    >
+                      🚀 Force Process
+                    </button>
+                  </td>
+                )}
+              </tr>
+              {expandedId === rowId && (
+                <tr>
+                  <td colSpan={user?.role !== 'user' ? 10 : 9}>
+                    <div className={styles.detailsSection}>
+                      {/* …details content… */}
                     </div>
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
+          );
+        })}
+
+        {/* Segment breaker */}
+        {resolvedContracts.length > 0 && (
+          <tr className={styles.segmentBreaker}>
+            <td colSpan={user?.role !== 'user' ? 10 : 9}>
+              📌 Resolved Contracts
+            </td>
+          </tr>
+        )}
+
+        {/* Resolved rows (greyed out but fully interactive) */}
+        {resolvedContracts.map((contract, idx) => {
+          const status = isValid(contract) ? '✅ Passed' : '❌ Needs Review';
+          const rowId = contract.contract_number || `resolved-${idx}`;
+          return (
+            <React.Fragment key={rowId}>
+              <tr className={styles.resolvedRow}>
+                <td>{contract.contract_number || '—'}</td>
+                <td>{formatDate(contract.timestamp)}</td>
+                <td>{status}</td>
+                <td>
+                  {editingWorkflowFor === contract.contract_number ? (
+                    <select
+                      value={contract.workflow_status || ''}
+                      onChange={e => {
+                        handleWorkflowStatusChange(contract.contract_number, e.target.value);
+                        setEditingWorkflowFor(null);
+                      }}
+                      onBlur={() => setEditingWorkflowFor(null)}
+                      autoFocus
+                      className={styles.workflowSelect}
+                    >
+                      <option value="">-- select status --</option>
+                      <option value="Accepted">Accepted</option>
+                      <option value="Reject">Reject</option>
+                      <option value="Pending">Pending Verification</option>
+                      <option value="Simplify need editing">Simplify need editing</option>
+                      <option value="LOI need editing">LOI need editing</option>
+                    </select>
+                  ) : (
+                    <>
+                      {contract.workflow_status || '—'}
+                      {refreshingContracts[contract.contract_number] ? (
+                        <span className={styles.spinner} />
+                      ) : (
+                        <button
+                          className={styles.refreshIconButton}
+                          title="Refresh Status"
+                          onClick={() => refreshContractStatus(contract.contract_number)}
+                        >
+                          <RefreshCcw size={14} />
+                        </button>
+                      )}
+                      <button
+                        className={styles.editWorkflowButton}
+                        title="Edit Workflow Status"
+                        onClick={() => setEditingWorkflowFor(contract.contract_number)}
+                      >
+                        ✏️
+                      </button>
+                    </>
                   )}
-                </div>
-              </td>
-            </tr>
-          )}
-        </React.Fragment>
-      );
-    })}
-  </tbody>
+                </td>
+                <td>{contract.lease_type || '—'}</td>
+                <td>{contract.tenant_type || '—'}</td>
+                <td>
+                  <select
+                    value={leadStatuses[contract.contract_number] || ''}
+                    onChange={e => handleLeadStatusChange(contract.contract_number, e.target.value)}
+                    className={styles.leadStatusSelect}
+                  >
+                    <option value="">Select Lead Status</option>
+                    <option value="Acknowledge">Acknowledge</option>
+                    <option value="In-progress">In-progress</option>
+                    <option value="Resolved">Resolved</option>
+                  </select>
+                </td>
+                <td>
+                  <button
+                    className={styles.expandButton}
+                    onClick={() => toggleDetails(rowId)}
+                  >
+                    {expandedId === rowId ? 'Hide' : 'View Details'}
+                  </button>
+                </td>
+                {user?.role !== 'user' && (
+                  <td>
+                    <button
+                      className={styles.forceProcessButton}
+                      onClick={() => {
+                        if (isProcessingAuto) {
+                          alert('⚠️ A process is already running. Please wait.');
+                          return;
+                        }
+                        forceProcessFile(contract.contract_number);
+                      }}
+                      disabled={isProcessingAuto}
+                    >
+                      🚀 Force Process
+                    </button>
+                  </td>
+                )}
+              </tr>
+              {expandedId === rowId && (
+                <tr className={styles.resolvedRow}>
+                  <td colSpan={user?.role !== 'user' ? 10 : 9}>
+                    <div className={styles.detailsSection}>
+                      {/* …details content… */}
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </>
+    );
+  })()}
+</tbody>
 </table>
     </div>
   );
 }
+
+function FileExplorer({ onClose }) {
+  const [tree, setTree] = useState([]);
+  const [currentPath, setCurrentPath] = useState('');
+
+  useEffect(() => {
+    fetchTree('');
+  }, []);
+
+  const fetchTree = async (path) => {
+    try {
+      const res = await api.get('/list-directory', { params: { path } });
+      let entries = res.data.entries;
+      // At root, only show these two folders:
+      if (path === '') {
+        entries = entries.filter(e =>
+          e.isDirectory && ['contracts', 'processed'].includes(e.name)
+        );
+      }
+      setTree(entries);
+      setCurrentPath(path);
+    } catch (err) {
+      console.error('Failed to list directory:', err);
+    }
+  };
+
+  const enter = (entry) => {
+    if (!entry.isDirectory) return;
+    const next = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+    fetchTree(next);
+  };
+
+  const downloadFile = (entry) => {
+    const filePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+    window.open(
+      `${API_URL}/api/download-file?path=${encodeURIComponent(filePath)}`,
+      '_blank'
+    );
+  };
+
+  const downloadFolder = () => {
+    window.open(
+      `${API_URL}/api/download-folder?path=${encodeURIComponent(currentPath)}`,
+      '_blank'
+    );
+  };
+
+  // new: upload handler
+  const uploadFiles = async (e) => {
+    const files = e.target.files;
+    if (!files.length) return;
+    const form = new FormData();
+    for (let file of files) {
+      form.append('files', file);
+    }
+    try {
+      await api.post('/upload-file', form, {
+        params: { path: currentPath },
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      fetchTree(currentPath); // refresh view
+      e.target.value = ''; // reset input
+    } catch (err) {
+      console.error('Upload failed:', err);
+      alert('Failed to upload files');
+    }
+  };
+
+  // Breadcrumb segments
+  const crumbs = currentPath === ''
+    ? []
+    : currentPath.split('/').map((seg, i, arr) => ({
+        name: seg,
+        path: arr.slice(0, i + 1).join('/')
+      }));
+
+  return (
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className={styles.explorerHeader}>
+          <button className={styles.closeBtn} onClick={onClose}>✕</button>
+          <nav className={styles.breadcrumb}>
+            <span
+              className={styles.crumb}
+              onClick={() => fetchTree('')}
+            >
+              Home
+            </span>
+            {crumbs.map(c => (
+              <React.Fragment key={c.path}>
+                <span className={styles.separator}>/</span>
+                <span
+                  className={styles.crumb}
+                  onClick={() => fetchTree(c.path)}
+                >
+                  {c.name}
+                </span>
+              </React.Fragment>
+            ))}
+          </nav>
+          <button
+            className={styles.downloadFolderBtn}
+            onClick={downloadFolder}
+          >
+            ↓ Download Folder
+          </button>
+          {/* new: upload button */}
+          <label className={styles.uploadLabel}>
+            ↑ Upload
+            <input
+              type="file"
+              multiple
+              onChange={uploadFiles}
+              className={styles.uploadInput}
+            />
+          </label>
+        </div>
+
+        {/* File/Folder List */}
+        <ul className={styles.fileList}>
+          {tree.map(entry => (
+            <li
+              key={entry.name}
+              className={entry.isDirectory ? styles.dirItem : styles.fileItem}
+              onDoubleClick={() =>
+                entry.isDirectory ? enter(entry) : downloadFile(entry)
+              }
+            >
+              {entry.isDirectory ? '📁' : '📄'} {entry.name}
+              {!entry.isDirectory && (
+                <button
+                  className={styles.downloadBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadFile(entry);
+                  }}
+                >
+                  ↓
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 
 export default LOIDashboard;
