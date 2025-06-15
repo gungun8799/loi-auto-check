@@ -843,7 +843,7 @@ const getContractDate = (ts) => {
                 className={styles.buttonOpenPopup}
                 onClick={() => {
                   api
-                    .post('/api/open-popup-tab', {
+                    .post('/open-popup-tab', {
                       systemType:      'simplicity',
                       contractNumber:  contract.contract_number.replace(/_/g, '/'),
                       username:        user.email,    // ← pass logged‐in email
