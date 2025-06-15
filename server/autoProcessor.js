@@ -8,6 +8,7 @@ import dotenv from 'dotenv'
 
 
 dotenv.config();
+const { SIMPLICITY_USER, SIMPLICITY_PASS } = process.env;
 // pick up your environment variable (as set in Render’s dashboard)
 const PORT = process.env.PORT || 5001;
 export const BASE_URL = process.env.API_URL || `http://localhost:${PORT}`;
@@ -134,63 +135,91 @@ async function processOneContract(filename) {
     console.log(`[📌 Prompt selected based on contract type] ${promptKey}`);
 
     // ─── Step 2: Direct API extract (bypass the UI entirely) ───────────────
-    console.log('[🔁 Calling ${BASE_URL}/api/extract-text directly for OCR & Gemini]');
-    const extractForm = new FormData();
-    // Append the PDF under “files” (match upload.array('files'))
-    extractForm.append(
-      'files',
-      fs.createReadStream(filePath),
-      path.basename(filePath)
-    );
-    // Ensure pages is provided
-    extractForm.append('pages', 'all');
-    extractForm.append('promptKey', promptKey);
+console.log(`[🔁 Calling ${BASE_URL}/api/extract-text for OCR & Gemini]`);
+const extractForm = new FormData();
+extractForm.append('files', fs.createReadStream(filePath), path.basename(filePath));
+extractForm.append('pages', 'all');
+extractForm.append('promptKey', promptKey);
 
-    // 2.1) Extract text + Gemini via backend
-    let extractRes
-    try {
-      extractRes = await axios.post(
-        `${BASE_URL}/api/extract-text`,
-        extractForm,
-        { headers: extractForm.getHeaders() }
-      )
-    } catch (err) {
-      console.error('[❌ extract-text failed]', err.response?.data || err.message)
-      throw err
-    }
-    const extractedText = extractRes.data.text
-    const geminiOut     = extractRes.data.geminiOutput
-    console.log('[✅ Backend extract complete]')
+// 2.1) Extract text + Gemini via backend
+let extractRes;
+try {
+  extractRes = await axios.post(
+    `${BASE_URL}/api/extract-text`,
+    extractForm,
+    { headers: extractForm.getHeaders() }
+  );
+} catch (err) {
+  console.error('[❌ extract-text failed]', err.response?.data || err.message);
+  throw err;
+}
+const extractedText = extractRes.data.text;
+const geminiOut     = extractRes.data.geminiOutput;
+console.log('[✅ Backend extract complete]');
 
-    // 2.2) Parse out the Contract Number from Gemini output
-    let parsedPdf
-    try {
-      let raw = geminiOut.trim()
-        .replace(/^```json\s*/i, '')
-        .replace(/```$/, '')
-      parsedPdf = JSON.parse(raw)
-    } catch (e) {
-      console.error('[❌ Failed to parse Gemini JSON]', e.message)
-      throw e
-    }
-    const extractedContractNumber = parsedPdf['Contract Number']
-    const contractId = extractedContractNumber.replace(/\//g, '_')
-    console.log(`[🔖 Extracted Contract Number] ${extractedContractNumber}`)
+// 2.2) Parse out the Contract Number from Gemini output
+let parsedPdf;
+try {
+  const raw = geminiOut
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/```$/, '');
+  parsedPdf = JSON.parse(raw);
+} catch (e) {
+  console.error('[❌ Failed to parse Gemini JSON]', e.message);
+  throw e;
+}
+const extractedContractNumber = parsedPdf['Contract Number'];
+const contractId = extractedContractNumber.replace(/\//g, '_');
+console.log(`[🔖 Extracted Contract Number] ${extractedContractNumber}`);
 
-    // 2.3) Auto‐scrape Simplicity for the extracted contract
-    console.log(`[🔐 Auto-scrape for ${extractedContractNumber}]`)
-    const scrapeRes = await axios.post(`${BASE_URL}/api/scrape-url`, {
-      systemType:      'simplicity',
+// ─── Step 2.2.5: Ensure we’re logged in to Simplicity ───────────────────
+console.log(`[🔐 Logging in to Simplicity as ${process.env.SIMPLICITY_USER}]`);
+try {
+  await axios.post(
+    `${BASE_URL}/api/login`,
+    {
+      systemType: 'simplicity',
+      username:   process.env.SIMPLICITY_USER,
+      password:   process.env.SIMPLICITY_PASS,
+    },
+    { withCredentials: true }
+  );
+  console.log('[✅ Logged in to Simplicity]');
+} catch (err) {
+  console.error('[❌ Simplicity login failed]', err.response?.data || err.message);
+  throw err;
+}
+
+// 2.3) Auto‐scrape Simplicity for the extracted contract
+console.log(`[🔐 Auto-scrape for ${extractedContractNumber}]`);
+let scrapeRes;
+try {
+  scrapeRes = await axios.post(
+    `${BASE_URL}/api/scrape-url`,
+    {
+      systemType:     'simplicity',
       promptKey,
-      contractNumber:  extractedContractNumber,
-    })
-    if (!scrapeRes.data.success) {
-      throw new Error(`Scrape-URL failed: ${scrapeRes.data.message}`)
-    }
-    const webRaw       = scrapeRes.data.raw
-    const webGeminiRaw = scrapeRes.data.geminiOutput
-    const popupUrl     = scrapeRes.data.popupUrl;
-    console.log('[✅ Web scrape complete]')
+      contractNumber: extractedContractNumber,
+      username:       SIMPLICITY_USER,
+      password:       SIMPLICITY_PASS,
+    },
+    { withCredentials: true }
+  );
+} catch (err) {
+  console.error('[❌ scrape-url request failed]', err.response?.data || err.message);
+  throw err;
+}
+
+if (!scrapeRes.data.success) {
+  throw new Error(`Scrape-URL failed: ${scrapeRes.data.message}`);
+}
+
+const webRaw       = scrapeRes.data.raw;
+const webGeminiRaw = scrapeRes.data.geminiOutput;
+const popupUrl     = scrapeRes.data.popupUrl;
+console.log('[✅ Web scrape complete]');
+console.log('[✅ Web scrape complete]');
 
     // 2.4) Parse the web‐scrape Gemini JSON
     let parsedWeb

@@ -289,40 +289,83 @@ app.post('/api/fetch-next-pdf-to-process', async (req, res) => {
 
 app.post('/api/process-pdf', async (req, res) => {
   const { contractNumber, filePath } = req.body;
+  let browser;
 
   try {
-    // Open Puppeteer and navigate to the extraction page
-    const browser = await puppeteer.launch({ headless: false });
+    // ─── Launch Puppeteer ────────────────────────────────────────────────
+    try {
+      browser = await puppeteer.launch({ headless: false, args: ['--no-sandbox'] });
+      console.log('[✅ Puppeteer launched]');
+    } catch (launchErr) {
+      console.error('[❌ Puppeteer failed to launch]', launchErr);
+      throw launchErr;
+    }
+
     const page = await browser.newPage();
 
-    // Navigate to the page containing the file extraction feature
-    await page.goto('http://localhost:5001/extract-pdf'); // Adjust URL as needed
+    // ─── Proxy page console / errors / network ────────────────────────────
+    page.on('console', msg => console.log(`↪️ PAGE LOG: ${msg.text()}`));
+    page.on('pageerror', err => console.error('↪️ PAGE ERROR:', err));
+    page.on('response', resp => console.log(`↪️ RESPONSE ${resp.status()} → ${resp.url()}`));
 
-    // Simulate dragging the file into the file upload input area
-    const inputElement = await page.$('input[type="file"]');
-    await inputElement.uploadFile(filePath);  // Use the actual file path
+    // ─── Navigate to extraction UI ────────────────────────────────────────
+    try {
+      await page.goto('http://localhost:5001/extract-pdf', { waitUntil: 'networkidle0' });
+      console.log('[↪️ Navigated to /extract-pdf]');
+    } catch (navErr) {
+      await page.screenshot({ path: `process-pdf-nav-fail-${contractNumber}.png` });
+      console.error('[❌ Navigation to extract-pdf failed]', navErr);
+      throw navErr;
+    }
 
-    // Click the "Extract" button to start the extraction
-    const extractButton = await page.$('button#extract');  // Adjust the selector as needed
-    await extractButton.click();
+    // ─── Upload the PDF ───────────────────────────────────────────────────
+    try {
+      const input = await page.$('input[type="file"]');
+      await input.uploadFile(filePath);
+      console.log(`[↪️ Uploaded file ${filePath}]`);
+    } catch (uploadErr) {
+      await page.screenshot({ path: `process-pdf-upload-fail-${contractNumber}.png` });
+      console.error('[❌ File upload failed]', uploadErr);
+      throw uploadErr;
+    }
 
-    // Wait for the extraction to finish (you can set a timeout or wait for specific UI changes)
-    await page.waitForSelector('#extraction-status', { visible: true });  // Adjust based on your UI
+    // ─── Trigger extraction ───────────────────────────────────────────────
+    try {
+      const btn = await page.$('button#extract');
+      await btn.click();
+      console.log('[↪️ Clicked Extract button]');
+    } catch (clickErr) {
+      await page.screenshot({ path: `process-pdf-click-fail-${contractNumber}.png` });
+      console.error('[❌ Clicking Extract button failed]', clickErr);
+      throw clickErr;
+    }
 
-    console.log('[PDF Extract] Extraction finished for contract:', contractNumber);
+    // ─── Wait for completion ──────────────────────────────────────────────
+    try {
+      await page.waitForSelector('#extraction-status', { visible: true, timeout: 60000 });
+      console.log(`[✅ Extraction finished for contract: ${contractNumber}]`);
+    } catch (waitErr) {
+      await page.screenshot({ path: `process-pdf-wait-fail-${contractNumber}.png` });
+      console.error('[❌ Waiting for extraction status failed]', waitErr);
+      throw waitErr;
+    }
 
-    // Update the contract status in Firebase
+    // ─── Update Firebase status ───────────────────────────────────────────
     const fileDocRef = db.collection('file_check').doc(contractNumber);
-    await fileDocRef.update({
-      contract_status: 'completed',  // Set status to 'completed' after extraction
-    });
+    await fileDocRef.update({ contract_status: 'completed' });
+    console.log(`[✅ Firebase status updated for ${contractNumber}]`);
 
     res.json({ success: true, message: `File processed: ${contractNumber}` });
-
-    await browser.close();
   } catch (err) {
     console.error('[PDF Process Error]', err);
     res.status(500).json({ success: false, message: 'Error processing PDF', error: err.message });
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+        console.log('[✅ Puppeteer closed]');
+      } catch {}
+    }
   }
 });
 
