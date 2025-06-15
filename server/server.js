@@ -28,7 +28,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // ✅ Store Puppeteer sessions for different systems
 const browserSessions = new Map();
-
+const BASE_DIR   = process.cwd();
 // Env and Express setup
 const app = express();
 const upload = multer({ dest: 'tmp_uploads/' });
@@ -110,6 +110,46 @@ app.get('/api/list-files', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
+// DELETE /api/delete-entry?path=<url-encoded-relative-path>
+// DELETE an individual file or empty folder
+app.delete('/api/delete-entry', async (req, res) => {
+  try {
+    const relPath = req.query.path;               // e.g. "contracts/xyz.pdf"
+    if (!relPath) {
+      return res.status(400).json({ message: 'path query parameter is required' });
+    }
+
+    // Build the absolute path and ensure it stays under BASE_DIR
+    const abs = path.resolve(BASE_DIR, relPath);
+    if (!abs.startsWith(path.resolve(BASE_DIR))) {
+      return res.status(403).json({ message: 'Forbidden: outside of allowed directory' });
+    }
+
+    const stats = await fs.promises.stat(abs);
+
+    if (stats.isDirectory()) {
+      // Only delete if directory is empty
+      const entries = await fs.promises.readdir(abs);
+      if (entries.length > 0) {
+        return res.status(400).json({ message: 'Directory not empty' });
+      }
+      await fs.promises.rmdir(abs);
+      console.log('[DELETE] Directory removed:', abs);
+    } else {
+      // It's a file
+      await fs.promises.unlink(abs);
+      console.log('[DELETE] File removed:', abs);
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE ENTRY ERROR]', err);
+    return res.status(500).json({ message: err.message });
+  }
+});
+
 
 app.post('/api/upload-file', upload.array('files'), async (req, res) => {
   try {

@@ -1115,6 +1115,19 @@ function FileExplorer({ onClose }) {
     }
   };
 
+  // new: delete handler
+  const deleteEntry = async (entry) => {
+    const target = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+    if (!window.confirm(`Delete "${entry.name}"?`)) return;
+    try {
+      await api.delete('/delete-entry', { params: { path: target } });
+      fetchTree(currentPath);
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert('Failed to delete entry');
+    }
+  };
+
   // Breadcrumb segments
   const crumbs = currentPath === ''
     ? []
@@ -1177,17 +1190,22 @@ function FileExplorer({ onClose }) {
               }
             >
               {entry.isDirectory ? '📁' : '📄'} {entry.name}
-              {!entry.isDirectory && (
+              <div className={styles.entryActions}>
+                {!entry.isDirectory && (
+                  <button
+                    className={styles.downloadBtn}
+                    onClick={e => { e.stopPropagation(); downloadFile(entry); }}
+                  >
+                    ↓
+                  </button>
+                )}
                 <button
-                  className={styles.downloadBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    downloadFile(entry);
-                  }}
+                  className={styles.deleteBtn}
+                  onClick={e => { e.stopPropagation(); deleteEntry(entry); }}
                 >
-                  ↓
+                  🗑️
                 </button>
-              )}
+              </div>
             </li>
           ))}
         </ul>
