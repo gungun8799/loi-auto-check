@@ -11,7 +11,7 @@ function AIVision() {
   const [geminiText, setGeminiText] = useState('');
   const [pdfGemini, setPdfGemini] = useState('');
   const [loading, setLoading] = useState(false);
-  const [promptKey, setPromptKey] = useState('');
+  const [promptKey, setPromptKey] = useState('LOI_permanent_fixed_fields');
   const [promptOptions, setPromptOptions] = useState([]);
 
   const [urlInput, setUrlInput] = useState('');
@@ -48,7 +48,9 @@ function AIVision() {
     const [successMessage, setSuccessMessage] = useState(null); // State for success messages
     const [autoProcessLoading, setAutoProcessLoading] = useState(false); // Changed loading to autoProcessLoading
     const [scrapedPopupUrl, setScrapedPopupUrl] = useState('');
-  
+    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+
+
 
   useEffect(() => {
     if (compareSourceA && compareSourceB) {
@@ -63,7 +65,7 @@ function AIVision() {
 
   const classifyContractType = async (ocrText) => {
     try {
-      const res = await axios.post('http://localhost:5001/api/contract-classify', { ocrText });
+      const res = await axios.post('${API_URL}/api/contract-classify', { ocrText });
       const type = res.data.contractType?.toLowerCase();  // Normalize case
   
       let selectedPrompt;
@@ -88,7 +90,7 @@ function AIVision() {
   const saveCompareResultToFirebase = async (contractNumber, compareResult, pdfGemini, webGemini, validationResult, popupUrl) => {
     try {
       // ✅ Send the raw contractNumber with slashes
-      await axios.post('http://localhost:5001/api/save-compare-result', {
+      await axios.post('${API_URL}/api/save-compare-result', {
         contractNumber, // not contractId
         compareResult,
         pdfGemini,
@@ -111,7 +113,7 @@ function AIVision() {
   
     try {
       if (selectedSystem === 'Simplicity') {
-        const res = await axios.post('http://localhost:5001/api/scrape-simplicity', {
+        const res = await axios.post('${API_URL}/api/scrape-simplicity', {
           url: urlInput,
           username: loginUsername,
           password: loginPassword,
@@ -144,7 +146,7 @@ function AIVision() {
           console.log(`[⏭️ Skip invalid filename] ${file.name}`);
           continue;
         }
-        
+
         // === Step 1: Extract OCR text for this file ===
         const textOnlyForm = new FormData();
         textOnlyForm.append('file', file);
@@ -153,7 +155,7 @@ function AIVision() {
         let ocrText;
         try {
           const ocrRes = await axios.post(
-            'http://localhost:5001/api/extract-text-only',
+            '${API_URL}/api/extract-text-only',
             textOnlyForm,
             { headers: textOnlyForm.getHeaders?.() || {} }
           );
@@ -189,7 +191,7 @@ function AIVision() {
   
         let textResponse;
         try {
-          const res = await axios.post('http://localhost:5001/api/extract-text', formData);
+          const res = await axios.post('${API_URL}/api/extract-text', formData);
           textResponse = res.data;
           setExtractedText(res.data.text);
           setGeminiText(res.data.geminiOutput);
@@ -231,17 +233,17 @@ function AIVision() {
         // === Step 5: Auto-login & scrape for this contract ===
         setAutoScrapeLoading(true);
         setSystemType('simplicity');
-        setUsername('TH40184213');
-        setPassword('u@@U5410154');
+        setUsername('john.pattanakarn@lotuss.com');
+        setPassword('Gofresh@0425-21');
         setContractNumber(extractedContract);
   
         console.log(`[🔐 AutoLogin for "${file.name}" → ${extractedContract}]`);
         let loginRes;
         try {
-          loginRes = await axios.post('http://localhost:5001/api/scrape-login', {
+          loginRes = await axios.post('${API_URL}/api/scrape-login', {
             systemType: 'simplicity',
-            username: 'TH40184213',
-            password: 'u@@U5410154',
+            username: 'john.pattanakarn@lotuss.com',
+            password: 'Gofresh@0425-21',
           });
         } catch {
           console.warn(`❌ AutoLogin request failed for "${file.name}".`);
@@ -257,7 +259,7 @@ function AIVision() {
         console.log(`[🚀 AutoScrape for "${file.name}" → ${extractedContract}]`);
         let scrapeRes;
         try {
-          scrapeRes = await axios.post('http://localhost:5001/api/scrape-url', {
+          scrapeRes = await axios.post('${API_URL}/api/scrape-url', {
             systemType: 'simplicity',
             promptKey: selectedPrompt,
             contractNumber: extractedContract,
@@ -298,7 +300,7 @@ function AIVision() {
           const jsonBlockWeb = rawWeb.substring(fb, lb + 1);
           const parsedWeb = JSON.parse(jsonBlockWeb);
   
-          await axios.post('http://localhost:5001/api/web-validate', {
+          await axios.post('${API_URL}/api/web-validate', {
             contractNumber: extractedContract,
             extractedData: parsedWeb,
             promptKey,
@@ -332,7 +334,7 @@ function AIVision() {
     setScrapedGeminiText('');
   
     try {
-      const res = await axios.post('http://localhost:5001/api/scrape-popup-login', {
+      const res = await axios.post('${API_URL}/api/scrape-popup-login', {
         url: urlInput,
       });
   
@@ -391,7 +393,7 @@ function AIVision() {
     formData.append('file', file);
 
     try {
-      const res = await axios.post('http://localhost:5001/api/get-sheet-names', formData);
+      const res = await axios.post('${API_URL}/api/get-sheet-names', formData);
       setSheetNames(res.data.sheetNames);
       setTempExcelFileName(res.data.tempFileName);
     } catch (err) {
@@ -403,7 +405,7 @@ function AIVision() {
     if (!selectedSheet || !tempExcelFileName) return;
 
     try {
-      const res = await axios.post('http://localhost:5001/api/process-sheet', {
+      const res = await axios.post('${API_URL}/api/process-sheet', {
         sheetName: selectedSheet,
         fileName: tempExcelFileName,
         promptKey: promptKey,
@@ -424,7 +426,7 @@ function AIVision() {
     }
   
     try {
-      const res = await axios.post('http://localhost:5001/api/fetch-latest-json', {
+      const res = await axios.post('${API_URL}/api/fetch-latest-json', {
         sources: selected,
       });
   
@@ -469,7 +471,8 @@ function AIVision() {
         }
       }
   
-      const compareRes = await axios.post('http://localhost:5001/api/gemini-compare', {
+      const compareRes = await axios.post('${API_URL}/api/gemini-compare', {
+        
         formattedSources,
         promptKey,
       });
@@ -490,7 +493,7 @@ function AIVision() {
   
         console.log('[📝 Saving comparison result to Firestore]', contractId);
   
-        await axios.post('http://localhost:5001/api/save-compare-result', {
+        await axios.post('${API_URL}/api/save-compare-result', {
           contractNumber: contractId,
           compareResult: parsedTable,
           pdfGemini,
@@ -572,7 +575,7 @@ function AIVision() {
     let validateRes;
     try {
       validateRes = await axios.post(
-        'http://localhost:5001/api/validate-document',
+        '${API_URL}/api/validate-document',
         {
           extractedData: parsed,
           promptKey,
@@ -611,7 +614,7 @@ function AIVision() {
     const contractField = parsed?.['Contract Number'] || 'unknown_contract';
     const contractId    = contractField.replace(/\//g, '_');
     try {
-      await axios.post('http://localhost:5001/api/save-validation-result', {
+      await axios.post('${API_URL}/api/save-validation-result', {
         contractNumber: contractId,
         validationResult: parsedResult,
       });
@@ -631,7 +634,7 @@ function AIVision() {
     let validateRes;
     try {
       validateRes = await axios.post(
-        'http://localhost:5001/api/validate-document',
+        '${API_URL}/api/validate-document',
         {
           extractedData: parsedData,
           promptKey, // still coming from your React state
@@ -666,7 +669,7 @@ function AIVision() {
     const contractField = parsedData?.['Contract Number'] || 'unknown_contract';
     const contractId = contractField.replace(/\//g, '_');
     try {
-      await axios.post('http://localhost:5001/api/save-validation-result', {
+      await axios.post('${API_URL}/api/save-validation-result', {
         contractNumber: contractId,
         validationResult: parsedResult,
       });
@@ -681,7 +684,7 @@ function AIVision() {
   
     try {
       // Send a request to the backend to process PDF files
-      const res = await axios.post('http://localhost:5001/api/auto-process-pdf-folder', {
+      const res = await axios.post('${API_URL}/api/auto-process-pdf-folder', {
         folderPath: sharepointPath, // Pass the folder path (could be from SharePoint or local path)
       });
   
@@ -967,7 +970,7 @@ function AIVision() {
       className={styles.button}
       onClick={async () => {
         try {
-          const res = await axios.post('http://localhost:5001/api/scrape-login', {
+          const res = await axios.post('${API_URL}/api/scrape-login', {
             systemType,
             username,
             password,
@@ -1003,7 +1006,7 @@ function AIVision() {
       style={{ marginTop: '1rem' }}
       onClick={async () => {
         try {
-          const res = await axios.post('http://localhost:5001/api/scrape-url', {
+          const res = await axios.post('${API_URL}/api/scrape-url', {
             systemType: 'simplicity',
             promptKey,
             contractNumber,

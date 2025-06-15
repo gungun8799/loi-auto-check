@@ -41,7 +41,7 @@ You are a document validator for lease contracts. Check if each field is valid b
   – Otherwise valid with reason: “Space Design Type matches ‘<tenant>’ from Tenant Type.”
 
 "Billing option":
- • Valid if value == “Calendar Month” (case-sensitive).  
+ • Valid if value == “Calendar Month”.  
   – If null or empty, invalid with reason: “Billing option is missing.”  
   – If value ≠ “Calendar Month” exactly, invalid with reason:  
    “Billing option (‘<value>’) is not ‘Calendar Month’.”  
@@ -60,33 +60,44 @@ You are a document validator for lease contracts. Check if each field is valid b
    “Net Rent (‘<value>’) is not a positive number.”  
   – Otherwise valid with reason: “Net Rent is valid.”
 
-"Tenancy Deposit":
- • Must be numeric ≥ 0. If null, treat as zero.  
- • Apply these rules in order:  
-  1. Let deposit = numeric value of “Tenancy Deposit” (ignore any commas). Let rent = numeric value of “Net Rent (p.m.)”.  
-  2. Exception 2: If “Brand Name” contains “ATM SCB” (case-insensitive):  
-   – If deposit == 0, valid with reason:  
-    “Brand Name contains ATM SCB; Tenancy Deposit may be zero.”  
-   – If deposit > 0, valid with reason:  
-    “Brand Name contains ATM SCB; Tenancy Deposit (‘<deposit>’) is acceptable (≥ 0).”  
-   – Stop—no further checks.  
-  3. Exception 1: If “Brand Name” contains “ATM KBANK” (case-insensitive) AND “Property Type” (case-insensitive) == “Go Fresh”:  
-   – If deposit < rent, invalid with reason:  
-    “Brand Name contains ATM KBANK and Property Type is Go Fresh; Tenancy Deposit (‘<deposit>’) is less than 1 × Net Rent (‘<rent>’).”  
-   – Otherwise valid with reason:  
-    “Brand Name contains ATM KBANK and Property Type is Go Fresh; Tenancy Deposit (‘<deposit>’) ≥ 1 × Net Rent (‘<rent>’).”  
-   – Stop—no further checks.  
-  4. Exception 3: If “Property Type” (case-insensitive) ≠ “Hypermarket”:  
-   – If deposit < 2 × rent, invalid with reason:  
-    “Property Type is not Hypermarket; Tenancy Deposit (‘<deposit>’) is less than 2 × Net Rent (‘<rent>’ × 2 = '<expected>').”  
-   – Otherwise valid with reason:  
-    “Property Type is not Hypermarket; Tenancy Deposit (‘<deposit>’) ≥ 2 × Net Rent (‘<rent>’ × 2 = '<expected>').”  
-   – Stop—no further checks.  
-  5. Default rule:  
-   – If deposit < 3 × rent, invalid with reason:  
-    “Tenancy Deposit (‘<deposit>’) is less than 3 × Net Rent (‘<rent>’ × 3 = '<expected>').”  
-   – Otherwise valid with reason:  
-    “Tenancy Deposit (‘<deposit>’) ≥ 3 × Net Rent (‘<rent>’ × 3 = '<expected>').”
+"Tenancy Deposit",
+  • Must be numeric ≥ 0. If null or empty, treat as zero.
+  • Let deposit = numeric value of “Tenancy Deposit” (ignore commas), and rent = numeric value of “Net Rent (p.m.)”.
+  • Apply rules in this order:
+
+    1. **Low-Rent Exception:** If rent < 5000:
+       – If deposit < 1 × rent, **invalid** with reason:
+         “Net Rent (<rent>) < 5000; Tenancy Deposit (<deposit>) is less than required 1 × rent (=<rent>).”
+       – Otherwise **valid** with reason:
+         “Net Rent (<rent>) < 5000; Tenancy Deposit (<deposit>) ≥ 1 × rent (=<rent>).”
+       – **Stop**—no further checks.
+
+    2. **ATM SCB Exception:** If “Brand Name” contains “ATM SCB” (case-insensitive):
+       – If deposit == 0, **valid** with reason:
+         “Brand Name contains ATM SCB; Tenancy Deposit may be zero.”
+       – If deposit > 0, **valid** with reason:
+         “Brand Name contains ATM SCB; Tenancy Deposit (<deposit>) is acceptable (≥ 0).”
+       – **Stop**—no further checks.
+
+    3. **ATM KBANK / Go Fresh Exception:** If “Brand Name” contains “ATM KBANK” (case-insensitive) **and** “Property Type” (case-insensitive) == “Go Fresh”:
+       – If deposit < 1 × rent, **invalid** with reason:
+         “Brand Name contains ATM KBANK and Property Type is Go Fresh; Tenancy Deposit (<deposit>) is less than 1 × Net Rent (=<rent>).”
+       – Otherwise **valid** with reason:
+         “Brand Name contains ATM KBANK and Property Type is Go Fresh; Tenancy Deposit (<deposit>) ≥ 1 × Net Rent (=<rent>).”
+       – **Stop**—no further checks.
+
+    4. **Non-Hypermarket Exception:** If “Property Type” (case-insensitive) ≠ “Hypermarket”:
+       – If deposit < 2 × rent, **invalid** with reason:
+         “Property Type is not Hypermarket; Tenancy Deposit (<deposit>) is less than 2 × Net Rent (=<expected>).”
+       – Otherwise **valid** with reason:
+         “Property Type is not Hypermarket; Tenancy Deposit (<deposit>) ≥ 2 × Net Rent (=<expected>).”
+       – **Stop**—no further checks.
+
+    5. **Default Rule:** (Hypermarket or no other exception)
+       – If deposit < 3 × rent, **invalid** with reason:
+         “Tenancy Deposit (<deposit>) is less than 3 × Net Rent (=<expected>).”
+       – Otherwise **valid** with reason:
+         “Tenancy Deposit (<deposit>) ≥ 3 × Net Rent (=<expected>).”
 
 "Payment Term":
  • Valid if value == “due in 7 days” (not case-sensitive).  
@@ -95,12 +106,17 @@ You are a document validator for lease contracts. Check if each field is valid b
    “Payment Term (‘<value>’) is not ‘due in 7 days’.”  
   – Otherwise valid with reason: “Payment Term is ‘due in 7 days’.”
 
-"Rental Ratio":
- • Valid if numeric and exactly “40” (ignore leading/trailing spaces).  
-  – If null or empty, invalid with reason: “Rental Ratio is missing.”  
-  – If numeric value ≠ 40, invalid with reason:  
-   “Rental Ratio (‘<value>’) is not 40.”  
-  – Otherwise valid with reason: “Rental Ratio is 40.”
+Rental Ratio:
+  If Lease Type is “permanent_fixed”:
+    • If the field is null or empty → invalid, reason: “Rental Ratio is missing.”
+    • Else if numeric value ≠ 40 → invalid, reason: “Rental Ratio (‘<value>’) is not 40.”
+    • Else (40) → valid, reason: “40”
+  Else if Lease Type is “service_express”:
+    • If the field is null or empty → invalid, reason: “Rental Ratio is missing.”
+    • Else if numeric value ≠ 0 → invalid, reason: “Rental Ratio (‘<value>’) is not 0.”
+    • Else (0) → valid, reason: “0”
+  Else:
+    • Skip Rental Ratio validation (Lease Type not recognized)
 
 "Include Utility":
  • Valid if value == “Yes” or “No” (case-sensitive).  

@@ -15,31 +15,66 @@ Your task is to:
   "Billing Frequency",
   "Monthly charge", (Output in "Yes", or "No"),
   
-  These fileds will be the rental rate, start date and end date of the monthly rent in 3 years, for PDF doc Need to check "4. ค่าเช่าและบริการ" section
-  "Year 1 : Contract Start date",
-  "Year 1 : Contract End date",
-  "Year 1 : Charge Type",
-  "Year 1 : Monthly Amount of rent",
-  "Year 1 : Monthly Amount of service",
+"Year 1 : Contract Start date",  
+• Interpret the PDF and web values as calendar dates and compare by actual date. If both means the same day, set match:true; otherwise match:false.
 
-  "Year 2 : Contract Start date",
-  "Year 2 : Contract End date",
-  "Year 2 : Charge Type",
-  "Year 2 : Monthly Amount of rent",
-  "Year 2 : Monthly Amount of service",
+"Year 1 : Contract End date", 
+• Interpret the PDF and web values as calendar dates and compare by actual date. If both means the same day, set match:true; otherwise match:false.
 
-  "Year 3 : Contract Start date",
-  "Year 3 : Contract End date",
-  "Year 3 : Charge Type",
-  "Year 3 : Monthly Amount of rent",
-  "Year 3 : Monthly Amount of service",
+"Year 1 : Charge Type",  
+• Compare the meaning of the PDF and web values: if both indicate a fixed rate, or both indicate a variable rate, set match:true; otherwise match:false.
+
+"Year 1 : Monthly Amount of rent",  
+• Compare the underlying numeric value in PDF vs. web. If they represent the same amount, set match:true; otherwise match:false.
+
+"Year 1 : Monthly Amount of service",  
+• Compare the underlying numeric value in PDF vs. web. If they represent the same amount, set match:true; otherwise match:false.
+
+"Year 2 : Contract Start date",  
+• Interpret the PDF and web values as calendar dates and compare by actual date. If both fall on the same day, set match:true; otherwise match:false.
+
+"Year 2 : Contract End date",  
+• Interpret the PDF and web values as calendar dates and compare by actual date. If both fall on the same day, set match:true; otherwise match:false.
+
+"Year 2 : Charge Type",  
+• Compare the meaning of the PDF and web values: if both indicate a fixed rate, or both indicate a variable rate, set match:true; otherwise match:false.
+
+"Year 2 : Monthly Amount of rent",  
+• Compare the underlying numeric value in PDF vs. web. If they represent the same amount, set match:true; otherwise match:false.
+
+"Year 2 : Monthly Amount of service",  
+• Compare the underlying numeric value in PDF vs. web. If they represent the same amount, set match:true; otherwise match:false.
+
+"Year 3 : Contract Start date",  
+• Interpret the PDF and web values as calendar dates and compare by actual date. If both fall on the same day, set match:true; otherwise match:false.
+
+"Year 3 : Contract End date",  
+• Interpret the PDF and web values as calendar dates and compare by actual date. If both fall on the same day, set match:true; otherwise match:false.
+
+"Year 3 : Charge Type",  
+• Compare the meaning of the PDF and web values: if both indicate a fixed rate, or both indicate a variable rate, set match:true; otherwise match:false.
+
+"Year 3 : Monthly Amount of rent",  
+• Compare the underlying numeric value in PDF vs. web. If they represent the same amount, set match:true; otherwise match:false.
+
+"Year 3 : Monthly Amount of service",  
+• Compare the underlying numeric value in PDF vs. web. If they represent the same amount, set match:true; otherwise match:false.
+
+
 
   "Other service charge (in the renting space)",
+   • If the “Other service charge (in the renting space)” amount is “0”, treat this field as match:true even if it’s empty or missing.  
+  • Otherwise, read both PDF and web descriptions and judge whether they refer to the same service—match true if they express the same concept (e.g. Thai “สำหรับไอเย็น” means “Cool Air Service Fee”).
+
   "Other service charge (in the renting space) Charge description", (if "Other service charge (in the renting space)" is 0, this field valid of null)
   "Other service charge (in the renting space) start date"
   "Other service charge (in the renting space) end date"
   "Other service charge (public space)",
-  "Other service charge (public space) Charge description",(if "Other service charge (in the renting space)" is 0, this field valid of null)
+   • If the “Other service charge (public space)” amount is “0”, treat this field as match:true even if it’s empty or missing.  
+  • Otherwise, interpret both PDF and web descriptions by their meaning and context—mark match:true if they describe the same service.
+ 
+
+  "Other service charge (public space) Charge description",(if "Other service charge (public space)" is 0, this field always valid )
   "Other service charge (public space) start date",
   "Other service charge (public space) end date",
 

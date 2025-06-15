@@ -6,6 +6,11 @@ import { FileText, UploadCloud, Globe, Table, ListChecks } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import styles from './App.module.css';
 
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+
+  // Now every request uses template interpolation against API_URL:
+  // axios.get(`${API_URL}/api/prompts`)
+  // axios.post(`${API_URL}/api/validate-document`, { ... })
 function AIVision() {
   const navigate = useNavigate();
 
@@ -57,12 +62,14 @@ function AIVision() {
   const [validationResult, setValidationResult] = useState(null);
   const [webValidationResult, setWebValidationResult] = useState(null);
   const [meterValidationResult, setMeterValidationResult] = useState(null);
+  const API_URL = process.env.REACT_APP_API_URL || '${API_URL}';
+
 
   // ─── Fetch available prompt keys on mount ────────────────────────────────────
   useEffect(() => {
     const fetchPromptOptions = async () => {
       try {
-        const res = await axios.get('http://localhost:5001/api/prompts');
+        const res = await axios.get('${API_URL}/api/prompts');
         setPromptOptions(res.data.promptKeys);
         setPromptKey(res.data.promptKeys[0] || '');
       } catch (err) {
@@ -96,7 +103,7 @@ function AIVision() {
       const parsed = JSON.parse(jsonBlock);
 
       // Call the API
-      const res = await axios.post('http://localhost:5001/api/validate-document', {
+      const res = await axios.post('${API_URL}/api/validate-document', {
         extractedData: parsed,
         promptKey,
       });
@@ -168,7 +175,7 @@ function AIVision() {
       const parsed = JSON.parse(jsonBlock);
 
       // Call the API
-      const res = await axios.post('http://localhost:5001/api/web-validate', {
+      const res = await axios.post('${API_URL}/api/web-validate', {
         contractNumber,
         extractedData: parsed,
         promptKey,
@@ -199,7 +206,7 @@ function AIVision() {
       files.forEach((file) => formData.append('files', file));
       formData.append('promptKey', promptKey);
 
-      const res = await axios.post('http://localhost:5001/api/extract-text', formData);
+      const res = await axios.post('${API_URL}/api/extract-text', formData);
       setExtractedText(res.data.text);
       setGeminiText(res.data.geminiOutput);
       setPdfGemini(res.data.geminiOutput);
@@ -212,7 +219,7 @@ function AIVision() {
   // ─── Check if login required before scraping ─────────────────────────────────
   const checkLoginRequirement = async () => {
     try {
-      const res = await axios.post('http://localhost:5001/api/check-login-required', {
+      const res = await axios.post('${API_URL}/api/check-login-required', {
         url: urlInput,
       });
       setRequiresLogin(res.data.requiresLogin);
@@ -230,7 +237,7 @@ function AIVision() {
     setScrapedGeminiText('');
 
     try {
-      const res = await axios.post('http://localhost:5001/api/scrape-popup-login', {
+      const res = await axios.post('${API_URL}/api/scrape-popup-login', {
         url: urlInput,
       });
 
@@ -257,7 +264,7 @@ function AIVision() {
     formData.append('file', file);
 
     try {
-      const res = await axios.post('http://localhost:5001/api/get-sheet-names', formData);
+      const res = await axios.post('${API_URL}/api/get-sheet-names', formData);
       setSheetNames(res.data.sheetNames);
       setTempExcelFileName(res.data.tempFileName);
     } catch (err) {
@@ -268,7 +275,7 @@ function AIVision() {
   const processExcelSheet = async () => {
     if (!selectedSheet || !tempExcelFileName) return;
     try {
-      const res = await axios.post('http://localhost:5001/api/process-sheet', {
+      const res = await axios.post('${API_URL}/api/process-sheet', {
         sheetName: selectedSheet,
         fileName: tempExcelFileName,
         promptKey,
@@ -290,7 +297,7 @@ function AIVision() {
 
     try {
       // 1) Fetch latest JSON strings
-      const fetchRes = await axios.post('http://localhost:5001/api/fetch-latest-json', {
+      const fetchRes = await axios.post('${API_URL}/api/fetch-latest-json', {
         sources: selected,
       });
       const rawResults = fetchRes.data.results;
@@ -321,7 +328,7 @@ function AIVision() {
       }
 
       // 5) Call Gemini compare
-      const cmpRes = await axios.post('http://localhost:5001/api/gemini-compare', {
+      const cmpRes = await axios.post('${API_URL}/api/gemini-compare', {
         formattedSources,
         promptKey,
       });
@@ -540,7 +547,7 @@ function AIVision() {
                     setScrapeLoading(true);
                     setLoginError('');
                     try {
-                      const res = await axios.post('http://localhost:5001/api/scrape-url-test', {
+                      const res = await axios.post('${API_URL}/api/scrape-url-test', {
                         systemType,
                         username,
                         password,

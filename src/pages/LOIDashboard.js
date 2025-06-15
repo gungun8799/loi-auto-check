@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { BarChartBig, RefreshCcw } from 'lucide-react';
 import { Bar } from 'react-chartjs-2';
 import * as XLSX from 'xlsx';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 
 
@@ -32,7 +33,8 @@ const [editingWorkflowFor, setEditingWorkflowFor] = useState(null);
     workflowStatus: '',
     tenantType: '',
     status: '',
-    search: ''
+    search: '',
+    leadStatus: ''  // ← new
   });
   const [leadStatuses, setLeadStatuses] = useState({});
   const handleLogout = () => {
@@ -51,23 +53,64 @@ const [exportTo, setExportTo] = useState('');     // e.g. "2025-06-10"
     const [successMessage, setSuccessMessage] = useState(null);
     const [errorAuto, setErrorAuto] = useState(null);
     const [sharepointPath, setSharepointPath] = useState('');
-  useEffect(() => {
+    const API_URL = process.env.REACT_APP_API_URL || '${API_URL}';
+
+
+  // ─── Failsafe states ─────────────────────────────────────────────────────────
+  // Prevent double-start
+  const [isProcessingAuto, setIsProcessingAuto] = useState(false);
+  // Track online/offline
+   const [isOnline, setIsOnline] = useState(navigator.onLine);
+   
+   useEffect(() => {
+    // Fetch contracts + lead statuses
     const fetchData = async () => {
       try {
-        const res = await axios.get('http://localhost:5001/api/get-compare-results');
+        const res = await axios.get(`${API_URL}/api/get-compare-results`);
         if (res.data.success && Array.isArray(res.data.data)) {
           const rawContracts = res.data.data;
           setContracts(rawContracts);
           setFilteredContracts(rawContracts);
           computeWeeklyStats(rawContracts);
-          
         }
+  
+        const leadRes = await axios.get(`${API_URL}/api/get-lead-statuses`);
+        if (leadRes.data.success && leadRes.data.statuses) {
+          setLeadStatuses(leadRes.data.statuses);
+        }
+  
+        // If we got here, we’re online
+        setIsOnline(true);
+        setErrorAuto(null);
       } catch (err) {
         console.error('❌ Failed to fetch compare_result data:', err);
+        // If the error is due to network, mark offline
+        if (!navigator.onLine) {
+          setIsOnline(false);
+        }
       }
     };
+  
+    // Initial load
     fetchData();
-  }, []);
+  
+    // Retry when back online
+    const handleOnline = () => {
+      setIsOnline(true);
+      fetchData();
+    };
+  
+    // Mark offline immediately on disconnect
+    const handleOffline = () => setIsOnline(false);
+  
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+  
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []); 
 
   useEffect(() => {
     applyFilters();
@@ -91,6 +134,12 @@ const [exportTo, setExportTo] = useState('');     // e.g. "2025-06-10"
     if (filters.status) {
       filteredData = filteredData.filter(contract => isValid(contract) === (filters.status === 'Passed'));
     }
+    if (filters.leadStatus) {
+      filteredData = filteredData.filter(
+        c => (leadStatuses[c.contract_number] || '') === filters.leadStatus
+      );
+    }
+  
     setFilteredContracts(filteredData);
   };
 
@@ -324,7 +373,7 @@ const exportBetween = (fromRaw, toRaw) => {
   const handleLeadStatusChange = async (contractId, status) => {
     setLeadStatuses(prev => ({ ...prev, [contractId]: status }));
     try {
-      await axios.post('http://localhost:5001/api/update-lead-status', {
+      await axios.post('${API_URL}/api/update-lead-status', {
         contractNumber: contractId.replace(/_/g, '/'),
         leadStatus: status,
       });
@@ -336,11 +385,23 @@ const exportBetween = (fromRaw, toRaw) => {
 
   const forceProcessFile = async (contractNumber) => {
     try {
-      const res = await axios.post('http://localhost:5001/api/force-process-contract', {
+      const res = await axios.post(`${API_URL}/api/force-process-contract`, {
         contractNumber
       });
-      if (res.data.success) alert('✅ Forced processing started.');
-      else alert('❌ Failed to start forced process.');
+  
+      if (res.data.success) {
+        alert('✅ Forced processing complete.');
+  
+        // Re-fetch the latest compare results and refresh state
+        const getRes = await axios.get(`${API_URL}/api/get-compare-results`);
+        if (getRes.data.success && Array.isArray(getRes.data.data)) {
+          setContracts(getRes.data.data);
+          setFilteredContracts(getRes.data.data);
+          computeWeeklyStats(getRes.data.data);
+        }
+      } else {
+        alert('❌ Failed to start forced process.');
+      }
     } catch (err) {
       alert('❌ Error during forced process.');
       console.error(err);
@@ -348,39 +409,49 @@ const exportBetween = (fromRaw, toRaw) => {
   };
 
   const autoProcessContracts = async () => {
-    setLoadingAuto(true); // Start loading indicator
+    // Start both loading and processing flags
+    setIsProcessingAuto(true);
+    setLoadingAuto(true);
+    setErrorAuto(null);
+    setSuccessMessage(null);
   
     try {
-      // Send a request to the backend to process PDF files
-      const res = await axios.post('http://localhost:5001/api/auto-process-pdf-folder', {
-        folderPath: sharepointPath, // Pass the folder path (could be from SharePoint or local path)
-      });
+      // Trigger backend auto-process
+      const res = await axios.post(
+        `${API_URL}/api/auto-process-pdf-folder`,
+        { folderPath: sharepointPath }
+      );
   
-      // Check if the response indicates success
       if (res.data.success) {
-        // If successful, display a success message and alert
-        setSuccessMessage(`✅ Auto processing started: ${res.data.processedCount} file(s) processed.`);
-        alert(`✅ Auto processing started: ${res.data.processedCount} file(s) processed.`);
-        
-        // Optionally, trigger the next step in your process (e.g., scraping, validation) here
+        const count = res.data.processedCount || 0;
+        const msg = `✅ Auto processing started: ${count} file(s) processed.`;
+        setSuccessMessage(msg);
+        alert(msg);
       } else {
-        // If no files were processed or found, show an error
-        setErrorAuto('⚠️ No new files found or nothing was processed.');
-        alert('⚠️ No new files found or nothing was processed.');
+        const errMsg = '⚠️ No new files found or nothing was processed.';
+        setErrorAuto(errMsg);
+        alert(errMsg);
       }
     } catch (err) {
-      // Handle different error scenarios (e.g., endpoint not found or server error)
       console.error('[Auto Processing Error]', err);
+      let errMsg;
   
-      if (err.response?.status === 404) {
-        setErrorAuto('❌ Endpoint not found: /api/auto-process-pdf-folder. Please check your backend route.');
-        alert('❌ Endpoint not found: /api/auto-process-pdf-folder. Please check your backend route.');
+      if (!navigator.onLine) {
+        errMsg = '❌ Network offline — will retry when you’re back online.';
+      } else if (err.response?.status === 404) {
+        errMsg = '❌ Endpoint not found: /api/auto-process-pdf-folder. Please check your backend route.';
       } else if (err.response?.status === 500) {
-        setErrorAuto('❌ Server error occurred. Please try again later.');
-        alert('❌ Server error occurred. Please try again later.');
-      } 
+        errMsg = '❌ Server error occurred. Please try again later.';
+      } else {
+        errMsg = `❌ Unexpected error: ${err.message}`;
+      }
+  
+      setErrorAuto(errMsg);
+      alert(errMsg);
     } finally {
-      setLoadingAuto(false); // Stop loading indicator when the process is done
+      // Clear flags
+      setLoadingAuto(false);
+      setIsProcessingAuto(false);
     }
   };
 
@@ -416,7 +487,7 @@ const handleTodaysReport = () => {
   
     // 2. Send to backend
     try {
-      await axios.post('http://localhost:5001/api/update-workflow-status', {
+      await axios.post('${API_URL}/api/update-workflow-status', {
         contractNumber,
         workflowStatus: chosenStatus
       });
@@ -503,7 +574,7 @@ const getContractDate = (ts) => {
   
     try {
       const { data } = await axios.post(
-        'http://localhost:5001/api/refresh-contract-status',
+        '${API_URL}/api/refresh-contract-status',
         { contractNumber }
       );
   
@@ -552,13 +623,21 @@ const getContractDate = (ts) => {
   {/* ─── “Start Auto Processing” button (for super_user or admin) ───────────────── */}
 {(user?.role === 'super_user' || user?.role === 'admin') && (
   <div style={{ marginBottom: '1rem' }}>
-    <button
-      className={styles.button_autoprocess}
-      onClick={autoProcessContracts}
-      disabled={loadingAuto}
-    >
-      {loadingAuto ? '⏳ Processing…' : '⚙️ Start Auto Processing'}
-    </button>
+<button
+  className={styles.button_autoprocess}
+  onClick={() => {
+    if (isProcessingAuto) {
+      return alert('⚠️ A process is already running. Please wait.');
+    }
+    if (!isOnline) {
+      return alert('⚠️ You appear offline. Will resume when you’re back online.');
+    }
+    autoProcessContracts();
+  }}
+  disabled={loadingAuto || !isOnline}
+>
+  {loadingAuto ? '⏳ Processing…' : '⚙️ Start Auto Processing'}
+</button>
     {successMessage && (
       <span style={{ marginLeft: '1rem', color: 'green' }}>
         {successMessage}
@@ -612,6 +691,16 @@ const getContractDate = (ts) => {
     <option value="Commercial">Commercial</option>
   </select>
 
+  <select
+    value={filters.leadStatus}
+    onChange={e => setFilters(prev => ({ ...prev, leadStatus: e.target.value }))}
+  >
+    <option value="">Select Lead Status</option>
+    <option value="Acknowledge">Acknowledge</option>
+    <option value="In-progress">In-progress</option>
+    <option value="Resolved">Resolved</option>
+  </select>
+
   {/* ─── New “From” / “To” date pickers ───────────────────────────────────────── */}
     {/* ─── “From” / “To” date pickers ───────────────────────────────────────────── */}
 {/* ─── “From” / “To” date pickers + Export button ─────────────────────────── */}
@@ -637,13 +726,15 @@ const getContractDate = (ts) => {
   </label>
   <button
     onClick={handleExport}
-    style={{ height: '2rem' }}
+    style={{ height: '2rem', marginBottom: '1rem' }}
+
   >
     Export to Excel
   </button>
   <button
     onClick={handleTodaysReport}
-    style={{ height: '2rem' }}
+    style={{ height: '2rem', marginBottom: '1rem' }}
+
   >
     Today’s Report
   </button>
@@ -657,11 +748,12 @@ const getContractDate = (ts) => {
       <th>Timestamp</th>
       <th>Status</th>
       <th>Workflow Status</th>
+      <th>Lease Type</th>
       <th>Tenant Type</th>
       <th>Lead Status</th>
       <th>Summary</th>
       <th>Simplicity Link</th>
-      <th>Force Process</th>
+      {user?.role !== 'user' && <th>Force Process</th>}
     </tr>
   </thead>
   <tbody>
@@ -672,6 +764,7 @@ const getContractDate = (ts) => {
       return (
         <React.Fragment key={rowId}>
           <tr>
+
             <td>{contract.contract_number || '—'}</td>
             <td>{formatDate(contract.timestamp)}</td>
             <td>{status}</td>
@@ -718,6 +811,8 @@ const getContractDate = (ts) => {
                 </>
               )}
             </td>
+            <td>{contract.lease_type || '—'}</td>
+
             <td>{contract.tenant_type || '—'}</td>
             <td>
               <select
@@ -742,34 +837,47 @@ const getContractDate = (ts) => {
             <td>
               <button
                 className={styles.buttonOpenPopup}
-                onClick={() =>
+                onClick={() => {
                   axios
-                    .post('http://localhost:5001/api/open-popup-tab', {
-                      systemType: 'simplicity',
-                      contractNumber: contract.contract_number.replace(/_/g, '/'),
+                    .post('${API_URL}/api/open-popup-tab', {
+                      systemType:      'simplicity',
+                      contractNumber:  contract.contract_number.replace(/_/g, '/'),
+                      username:        user.email,    // ← pass logged‐in email
+                      password:        user.password, // ← pass logged‐in password
                     })
-                    .then(res =>
-                      res.data.success
-                        ? alert('✅ Popup opened. Please check Chrome.')
-                        : alert('❌ Failed to open popup.')
-                    )
+                    .then(res => {
+                      if (res.data.success) {
+                        alert('✅ Popup opened. Please check Chrome.');
+                      } else {
+                        alert('❌ Failed to open popup.');
+                      }
+                    })
                     .catch(err => {
                       alert('❌ Error triggering popup tab.');
                       console.error(err);
-                    })
-                }
+                    });
+                }}
               >
                 🧾 Open Contract Popup
               </button>
             </td>
+            {user?.role !== 'user' && (
             <td>
-              <button
-                className={styles.forceProcessButton}
-                onClick={() => forceProcessFile(contract.contract_number)}
-              >
-                🚀 Force Process
-              </button>
+            <button
+              className={styles.forceProcessButton}
+              onClick={() => {
+                if (isProcessingAuto) {
+                  alert('⚠️ A process is already running. Please wait.');
+                  return;
+                }
+                forceProcessFile(contract.contract_number);
+              }}
+              disabled={isProcessingAuto}
+            >
+              🚀 Force Process
+            </button>
             </td>
+          )}
           </tr>
 
           {expandedId === rowId && (
