@@ -9,7 +9,8 @@ import dotenv from 'dotenv'
 
 dotenv.config();
 // pick up your environment variable (as set in Render’s dashboard)
-export const BASE_URL = process.env.API_URL || 'http://localhost:5001';
+const PORT = process.env.PORT || 5001;
+export const BASE_URL = process.env.API_URL || `http://localhost:${PORT}`;
 const FOLDER_PATH = path.join(process.cwd(), 'contracts');
 
 // === 🔁 Create dated output folders ===
