@@ -1,25 +1,43 @@
-# ── 1) Base image with Node 18
-FROM node:18-slim
+# ─── Use a lean Node image with Debian under the hood ────────────────────────
+FROM node:20-slim
 
-# ── 2) Install Chromium (for Puppeteer)
-RUN apt-get update \
- && apt-get install -y chromium-browser \
- && rm -rf /var/lib/apt/lists/*
+# ─── Install Chromium (and its runtime deps) ────────────────────────────────
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      chromium \
+      ca-certificates \
+      fonts-liberation \
+      libasound2 \
+      libatk1.0-0 \
+      libc6 \
+      libcairo2 \
+      libgbm1 \
+      libgtk-3-0 \
+      libnss3 \
+      libx11-xcb1 \
+      libxcomposite1 \
+      libxdamage1 \
+      libxext6 \
+      libxfixes3 \
+      libxrandr2 \
+      libxss1 \
+      libxtst6 \
+      wget \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# ── 3) Set the working directory
+# ─── Point Puppeteer at our system Chromium rather than downloading its own ─
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+# ─── Create app dir & install deps ──────────────────────────────────────────
 WORKDIR /usr/src/app
-
-# ── 4) Copy package manifests & install deps
 COPY package*.json ./
-RUN npm install
+# this will run your "postinstall": "npx puppeteer install" too
+RUN npm ci
 
-# ── 5) Copy the rest of your server code
+# ─── Copy rest of the code & build ─────────────────────────────────────────
 COPY . .
 
-# ── 6) Tell Puppeteer where Chrome lives
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-# ── 7) Expose your port
+# ─── Expose your backend port & start ───────────────────────────────────────
 EXPOSE 5001
-
-# ── 8) Start your app
-CMD ["node", "server.js"]
+CMD ["npm", "start"]
