@@ -25,15 +25,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // ✅ Store Puppeteer sessions for different systems
 const browserSessions = new Map();
+
 // Env and Express setup
-
-
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
 // read comma-separated list of allowed origins from env
-// replace your cors block in server.js with:
-
 const isDev = process.env.NODE_ENV === 'development';
 const allowedOrigins = isDev
   ? ['http://localhost:3000']
@@ -52,6 +49,35 @@ app.use(cors({
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   credentials: true
 }));
+
+app.use(express.json());
+app.use('/prompts', express.static(path.join(__dirname, 'prompts')));
+
+// ——— FIREBASE INIT ———
+let firebaseCred;
+if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+  try {
+    firebaseCred = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  } catch (e) {
+    console.warn('❌ Invalid FIREBASE_SERVICE_ACCOUNT_JSON, falling back to GOOGLE_APPLICATION_CREDENTIALS:', e.message);
+  }
+}
+
+if (firebaseCred) {
+  admin.initializeApp({
+    credential: admin.credential.cert(firebaseCred),
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  });
+} else {
+  // Fallback to service account file (GOOGLE_APPLICATION_CREDENTIALS) or ADC
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  });
+}
+
+const db = admin.firestore();
+const bucket = admin.storage().bucket();
 
 app.use(express.json());
 app.use(
@@ -181,28 +207,6 @@ const serviceAccount = JSON.parse(
 */
 // NEW – picks up GOOGLE_APPLICATION_CREDENTIALS for you
 
-let credential;
-if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-  try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-    credential = admin.credential.cert(serviceAccount);
-    console.log('✅ Using FIREBASE_SERVICE_ACCOUNT_JSON credentials');
-  } catch (e) {
-    console.error('❌ Invalid FIREBASE_SERVICE_ACCOUNT_JSON:', e);
-    process.exit(1);
-  }
-} else {
-  // only use applicationDefault in local/dev (with GOOGLE_APPLICATION_CREDENTIALS file)
-  credential = admin.credential.applicationDefault();
-  console.log('ℹ️ Using applicationDefault() credentials');
-}
-
-admin.initializeApp({
-  credential,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-});
-const db = admin.firestore();
-const bucket = admin.storage().bucket();
 
 // Vision + Gemini
 const visionClient = new ImageAnnotatorClient();
