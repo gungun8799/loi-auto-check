@@ -15,25 +15,26 @@ import { dirname } from 'path';
 
 
 import dotenv from 'dotenv';
+// ─── Load environment ────────────────────────────────
 dotenv.config({
   path: `.env.${process.env.NODE_ENV || 'development'}`
 });
+
+// ─── Constants & Helpers ────────────────────────────
 const FOLDER_PATH = path.join(process.cwd(), 'contracts');
 
 // Support __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-// ✅ Store Puppeteer sessions for different systems
+
+// ─── Puppeteer session store ────────────────────────
 const browserSessions = new Map();
-// Env and Express setup
 
-
+// ─── Express setup ──────────────────────────────────
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-// read comma-separated list of allowed origins from env
-// replace your cors block in server.js with:
-
+// ─── CORS ────────────────────────────────────────────
 const isDev = process.env.NODE_ENV === 'development';
 const allowedOrigins = isDev
   ? ['http://localhost:3000']
@@ -45,9 +46,11 @@ const allowedOrigins = isDev
 console.log('⚙️  CORS allowed origins:', allowedOrigins);
 
 app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    cb(new Error(`CORS policy: origin ${origin} not allowed`));
+  origin: (incomingOrigin, callback) => {
+    if (!incomingOrigin || allowedOrigins.includes(incomingOrigin)) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS policy: origin ${incomingOrigin} not allowed`));
   },
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   credentials: true
