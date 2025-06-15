@@ -4,7 +4,6 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import admin from 'firebase-admin';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -15,7 +14,10 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 
-
+import dotenv from 'dotenv';
+dotenv.config({
+  path: `.env.${process.env.NODE_ENV || 'development'}`
+});
 const FOLDER_PATH = path.join(process.cwd(), 'contracts');
 
 // Support __dirname in ES modules
@@ -24,19 +26,29 @@ const __dirname = dirname(__filename);
 // ✅ Store Puppeteer sessions for different systems
 const browserSessions = new Map();
 // Env and Express setup
-dotenv.config();
+
+
 const app = express();
 const upload = multer({ dest: 'uploads/' });
-app.use(
-  cors({
-    origin: [
-      'https://loi-auto-check-frontend.onrender.com',
-      
-    ],
-    methods: ['GET','POST','PUT','DELETE','OPTIONS'],
-    credentials: true
-  })
-);
+
+// read comma-separated list of allowed origins from env
+const allowedOrigins = (process.env.FRONTEND_URLS || '')
+  .split(',')
+  .map(u => u.trim())
+  .filter(u => u);
+
+app.use(cors({
+  origin: (incomingOrigin, callback) => {
+    // allow requests with no origin (e.g. mobile apps, curl) or matching one of your URLs
+    if (!incomingOrigin || allowedOrigins.includes(incomingOrigin)) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS policy: origin ${incomingOrigin} not allowed`));
+  },
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(
   '/prompts',
@@ -163,10 +175,10 @@ const serviceAccount = JSON.parse(
   fs.readFileSync(path.join(__dirname, './loi-checker-firebase-adminsdk-fbsvc-e5de01d327.json'), 'utf8')
 );
 */
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+// NEW – picks up GOOGLE_APPLICATION_CREDENTIALS for you
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+  credential: admin.credential.applicationDefault(),
   storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
 });
 const db = admin.firestore();
@@ -392,6 +404,22 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// GET /api/get-lead-statuses
+app.get('/api/get-lead-statuses', async (req, res) => {
+  try {
+    const snapshot = await db.collection('compare_result').get();
+    const statuses = {};
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      // contract_number in Firestore is stored without slashes
+      statuses[data.contract_number] = data.lead_status || '';
+    });
+    return res.json({ success: true, statuses });
+  } catch (err) {
+    console.error('[GET Lead Statuses Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 // ===== Excel Sheet Upload - Get Sheet Names =====
 app.post('/api/get-sheet-names', upload.single('file'), async (req, res) => {
   try {
