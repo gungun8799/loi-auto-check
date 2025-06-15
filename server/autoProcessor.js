@@ -195,17 +195,17 @@ try {
 console.log(`[🔐 Auto-scrape for ${extractedContractNumber}]`);
 let scrapeRes;
 try {
-  scrapeRes = await axios.post(
-    `${BASE_URL}/api/scrape-url`,
-    {
-      systemType:     'simplicity',
-      promptKey,
-      contractNumber: extractedContractNumber,
-      username:       SIMPLICITY_USER,
-      password:       SIMPLICITY_PASS,
-    },
-    { withCredentials: true }
-  );
+     scrapeRes = await axios.post(
+         `${BASE_URL}/api/scrape-url`,
+         {
+           systemType:     'simplicity',
+           promptKey,
+           contractNumber: extractedContractNumber,
+           username:       process.env.SIMPLICITY_USER,
+           password:       process.env.SIMPLICITY_PASS,
+         },
+         { withCredentials: true }
+       );
 } catch (err) {
   console.error('[❌ scrape-url request failed]', err.response?.data || err.message);
   throw err;
