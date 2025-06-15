@@ -55,7 +55,8 @@ app.use(cors({
   credentials: true,
   optionsSuccessStatus: 200     // ensure older browsers get a 200
 }))
-
+console.log('→ SIMPLICITY_USER=', process.env.SIMPLICITY_USER);
+console.log('→ SIMPLICITY_PASS=', process.env.SIMPLICITY_PASS && '*****');
 // 2) Add this line *immediately* after your `app.use(cors(...))`:
 
 app.use(express.json());
@@ -745,26 +746,40 @@ app.post('/api/scrape-url', async (req, res) => {
       return res.status(400).json({ message: 'Missing Simplicity username or password' });
     }
 
-    // 2) Ensure browser session exists, otherwise log in
-    let session = browserSessions.get(systemType);
-    if (!session) {
-      console.log(`[Simplicity] No session for ${systemType}, logging in as ${user}...`);
+    // if we don’t yet have a Puppeteer session, log in now
+  if (!browserSessions.has(systemType)) {
+    console.log(`[🔐 Logging in to Simplicity as ${user}]`);
+    try {
       const browser = await puppeteer.launch({ headless: true });
       const page    = await browser.newPage();
 
-      // Navigate to Simplicity login page
+      // navigate to your Simplicity login page
       await page.goto(process.env.SIMPLICITY_LOGIN_URL, { waitUntil: 'networkidle0' });
-      await page.type('#email', user);
-      await page.type('#password', pass);
-      await page.click('button[type="submit"]');
-      await page.waitForNavigation({ waitUntil: 'networkidle0' });
 
-      // (Optionally verify login success here)
+      // wait for and fill in login form
+      await page.waitForSelector('input[name="email"]', { timeout: 10000 });
+      await page.waitForSelector('input[name="password"]', { timeout: 10000 });
+      await page.type('input[name="email"]', user);
+      await page.type('input[name="password"]', pass);
 
+      // submit and wait for navigation
+      await Promise.all([
+        page.click('button[type="submit"]'),
+        page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 })
+      ]);
+
+      // verify login succeeded by checking for a dashboard-specific selector
+      const postLoginSelector = 'selector-you-see-after-login'; 
+      await page.waitForSelector(postLoginSelector, { timeout: 10000 });
+
+      // store for reuse
       browserSessions.set(systemType, { browser, page });
-      session = { browser, page };
-      console.log(`[✅ Logged in to ${systemType} as ${user}]`);
+      console.log(`[✅ Logged in to Simplicity as ${user}]`);
+    } catch (err) {
+      console.error('[❌ Simplicity login failed]', err.message || err);
+      return res.status(401).json({ message: 'Login to Simplicity failed', error: err.message });
     }
+  }
 
     const { browser, page } = session;
     const isLeaseOffer      = contractNumber.includes('LO');
