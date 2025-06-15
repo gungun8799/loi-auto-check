@@ -180,7 +180,7 @@ try {
     `${BASE_URL}/api/login`,
     {
       systemType: 'simplicity',
-      username:   process.env.SIMPLICITY_USER,
+      email:   process.env.SIMPLICITY_USER,
       password:   process.env.SIMPLICITY_PASS,
     },
     { withCredentials: true }
