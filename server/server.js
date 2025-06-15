@@ -22,6 +22,7 @@ dotenv.config({
   path: `.env.${process.env.NODE_ENV || 'development'}`
 });
 const FOLDER_PATH = path.join(process.cwd(), 'contracts');
+const isProd = process.env.NODE_ENV === 'production';
 
 // Support __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -295,7 +296,15 @@ app.post('/api/process-pdf', async (req, res) => {
   try {
     // ─── Launch Puppeteer ────────────────────────────────────────────────
     try {
-      browser = await puppeteer.launch({ headless: false, args: ['--no-sandbox'] });
+      const launchOptions = {
+        headless: isProd,
+        args: isProd
+          ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+          : [],
+        ...(isProd && { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH })
+      };
+    
+      browser = await puppeteer.launch(launchOptions);
       console.log('[✅ Puppeteer launched]');
     } catch (launchErr) {
       console.error('[❌ Puppeteer failed to launch]', launchErr);
@@ -747,39 +756,56 @@ app.post('/api/scrape-url', async (req, res) => {
     }
 
     // if we don’t yet have a Puppeteer session, log in now
-  if (!browserSessions.has(systemType)) {
-    console.log(`[🔐 Logging in to Simplicity as ${user}]`);
-    try {
-      const browser = await puppeteer.launch({ headless: true });
-      const page    = await browser.newPage();
+    if (!browserSessions.has(systemType)) {
+      console.log(`[🔐 Logging in to Simplicity as ${user}]`);
+      try {
+        // launch headless with no-sandbox flags for container compatibility
+        const launchOpts = {
+          headless: isProd,
+          args: isProd
+            ? [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu'
+              ]
+            : [],
+          ...(isProd && { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH })
+        };
+        
+        browser = await puppeteer.launch(launchOpts);
+        console.log('[✅ Puppeteer launched]');
 
-      // navigate to your Simplicity login page
-      await page.goto(process.env.SIMPLICITY_LOGIN_URL, { waitUntil: 'networkidle0' });
-
-      // wait for and fill in login form
-      await page.waitForSelector('input[name="email"]', { timeout: 10000 });
-      await page.waitForSelector('input[name="password"]', { timeout: 10000 });
-      await page.type('input[name="email"]', user);
-      await page.type('input[name="password"]', pass);
-
-      // submit and wait for navigation
-      await Promise.all([
-        page.click('button[type="submit"]'),
-        page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 })
-      ]);
-
-      // verify login succeeded by checking for a dashboard-specific selector
-      const postLoginSelector = 'selector-you-see-after-login'; 
-      await page.waitForSelector(postLoginSelector, { timeout: 10000 });
-
-      // store for reuse
-      browserSessions.set(systemType, { browser, page });
-      console.log(`[✅ Logged in to Simplicity as ${user}]`);
-    } catch (err) {
-      console.error('[❌ Simplicity login failed]', err.message || err);
-      return res.status(401).json({ message: 'Login to Simplicity failed', error: err.message });
+        // navigate to Simplicity login
+        await page.goto(process.env.SIMPLICITY_LOGIN_URL, { waitUntil: 'networkidle0' });
+    
+        // fill in credentials
+        await page.waitForSelector('input[name="email"]', { timeout: 10000 });
+        await page.type('input[name="email"]', user);
+        await page.waitForSelector('input[name="password"]', { timeout: 10000 });
+        await page.type('input[name="password"]', pass);
+    
+        // submit form & await navigation
+        await Promise.all([
+          page.click('button[type="submit"]'),
+          page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 })
+        ]);
+    
+        // confirm login by checking for a dashboard-specific element
+        const postLoginSelector = 'selector-you-see-after-login';
+        await page.waitForSelector(postLoginSelector, { timeout: 10000 });
+    
+        // store session for reuse
+        browserSessions.set(systemType, { browser, page });
+        console.log(`[✅ Logged in to Simplicity as ${user}]`);
+      } catch (err) {
+        console.error('[❌ Simplicity login failed]', err.message || err);
+        return res.status(401).json({
+          message: 'Login to Simplicity failed',
+          error: err.message
+        });
+      }
     }
-  }
 
     const { browser, page } = session;
     const isLeaseOffer      = contractNumber.includes('LO');
@@ -984,15 +1010,26 @@ app.post('/api/open-popup-tab', async (req, res) => {
     // --- LOGIN STEP (two-step) ---
     if (!browserSessions.has(systemType)) {
       console.log('[🔑 Not logged in — triggering two-step login]');
-
-      const puppeteer = await import('puppeteer');
-      browser = await puppeteer.launch({
-        headless: false,
+    
+      const isProd = process.env.NODE_ENV === 'production';
+      const launchOpts = {
+        headless: isProd,
         defaultViewport: null,
-        args: ['--start-fullscreen']
-      });
-      page = await browser.newPage();
-
+        args: isProd
+          ? [
+              '--no-sandbox',
+              '--disable-setuid-sandbox',
+              '--disable-dev-shm-usage',
+              '--disable-gpu',
+              '--start-fullscreen'
+            ]
+          : ['--start-fullscreen'],
+        ...(isProd && { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH })
+      };
+    
+      browser = await puppeteer.launch(launchOpts);
+      page    = await browser.newPage();
+    
       // 1) Load landing
       console.log('[Login] Navigating to apptop.aspx');
       await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', {
@@ -1129,9 +1166,32 @@ app.post('/api/scrape-login', async (req, res) => {
     if (browserSessions.has(systemType)) {
       ({ browser, page } = browserSessions.get(systemType));
     } else {
-      // 2) Launch fresh browser + page
-      browser = await puppeteer.launch({ headless: false });
-      page = await browser.newPage();
+      console.log(`[🔑 Launching new Puppeteer session for ${systemType}]`);
+    
+      const isProd = process.env.NODE_ENV === 'production';
+      const launchOptions = {
+        headless: isProd,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          ...(isProd ? [
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--start-fullscreen'
+          ] : [])
+        ],
+        // In production, point to the Render‐cached Chrome; in dev you can omit or override
+        ...(isProd
+          ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome' }
+          : {}
+        )
+      };
+    
+      browser = await puppeteer.launch(launchOptions);
+      page    = await browser.newPage();
+    
+      // store for reuse
+      browserSessions.set(systemType, { browser, page });
 
       // 3) Go to the Simplicity landing page
       await page.goto(
@@ -1394,13 +1454,30 @@ app.post('/api/web-validate', async (req, res) => {
       ({ browser, page } = browserSessions.get(systemType));
       console.log('[LOGIN] Reusing existing Simplicity session');
     } else {
-      console.log('[LOGIN] No session—launching new full-screen browser');
-      browser = await puppeteer.launch({
-        headless: false,
+      console.log('[LOGIN] No session—launching new Puppeteer browser');
+    
+      const isProd = process.env.NODE_ENV === 'production';
+      const launchOptions = {
+        headless: isProd,
         defaultViewport: null,
-        args: ['--start-fullscreen']
-      });
-      page = await browser.newPage();
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          ...(isProd
+            ? ['--disable-dev-shm-usage', '--disable-gpu', '--start-fullscreen']
+            : ['--start-fullscreen']
+          )
+        ],
+        ...(isProd && {
+          executablePath:
+            process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
+        })
+      };
+    
+      browser = await puppeteer.launch(launchOptions);
+      page    = await browser.newPage();
+    
+      browserSessions.set(systemType, { browser, page });
       await page.setViewport({ width: 1920, height: 1080 });
 
       console.log('[LOGIN] Navigating to landing page');
@@ -1905,14 +1982,31 @@ app.post('/api/refresh-contract-status', async (req, res) => {
     let browser, page;
 
     // ─── 1) LOGIN / SESSION SETUP ─────────────────────────────
-    if (browserSessions.has(systemType)) {
-      ({ browser, page } = browserSessions.get(systemType));
-      console.log('[REFRESH] Reusing existing session');
-    } else {
-      console.log('[REFRESH] No session — performing login');
-      // mirror your check-contract-status login logic here
-      browser = await puppeteer.launch({ headless: false });
-      page = await browser.newPage();
+if (browserSessions.has(systemType)) {
+  ({ browser, page } = browserSessions.get(systemType));
+  console.log('[REFRESH] Reusing existing session');
+} else {
+  console.log('[REFRESH] No session — performing login');
+
+  const isProd = process.env.NODE_ENV === 'production';
+  const launchOptions = {
+    headless: isProd,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      ...(isProd ? ['--disable-dev-shm-usage','--disable-gpu'] : [])
+    ],
+    ...(isProd && {
+      executablePath:
+        process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
+    })
+  };
+
+  browser = await puppeteer.launch(launchOptions);
+  page    = await browser.newPage();
+
+  // …followed by your existing login steps…
+  browserSessions.set(systemType, { browser, page });
       console.log('[REFRESH] goto landing page');
       await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
 
@@ -2520,8 +2614,23 @@ app.post('/api/check-contract-status', async (req, res) => {
     if (!browserSessions.has(systemType)) {
       // Fresh login
       console.log('[STEP] launching browser/session');
-      browser = await puppeteer.launch({ headless: false });
-      page = await browser.newPage();
+    
+      const isProd = process.env.NODE_ENV === 'production';
+      const launchOptions = {
+        headless: isProd,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          ...(isProd ? ['--disable-dev-shm-usage', '--disable-gpu'] : [])
+        ],
+        ...(isProd && {
+          executablePath:
+            process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
+        })
+      };
+    
+      browser = await puppeteer.launch(launchOptions);
+      page    = await browser.newPage();
 
       console.log('[STEP] going to apptop.aspx');
       await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
@@ -2587,9 +2696,15 @@ app.post('/api/check-contract-status', async (req, res) => {
 
         // Fallback to fresh login logic
         console.log('[STEP] launching browser/session');
-        browser = await puppeteer.launch({ headless: false });
-        page = await browser.newPage();
+        const isProd = process.env.NODE_ENV === 'production';
+        const launchOpts = {
+          headless: isProd,
+          args: ['--no-sandbox', '--disable-setuid-sandbox', ...(isProd ? ['--disable-dev-shm-usage','--disable-gpu'] : [])],
+          ...(isProd && { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome' })
+        };
 
+        browser = await puppeteer.launch(launchOpts);
+        page    = await browser.newPage();
         console.log('[STEP] going to apptop.aspx');
         await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
 
@@ -2880,8 +2995,21 @@ console.log('→ SIMPLICITY_PASS=', process.env.SIMPLICITY_PASS && '*****');
     if (browserSessions.has(systemType)) {
       ({ browser, page } = browserSessions.get(systemType));
     } else {
-      browser = await puppeteer.launch({ headless: false });
-      page = await browser.newPage();
+      const isProd = process.env.NODE_ENV === 'production';
+      const launchOpts = {
+        headless: isProd,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          ...(isProd ? ['--disable-dev-shm-usage', '--disable-gpu'] : [])
+        ],
+        ...(isProd && {
+          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
+        })
+      };
+
+      browser = await puppeteer.launch(launchOpts);
+      page    = await browser.newPage();
       await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
 
       await page.waitForSelector('#lblToLoginPage', { timeout: 20000 });
