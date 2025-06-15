@@ -724,21 +724,51 @@ app.post('/api/scrape-url', async (req, res) => {
   console.log('[Request Body]', req.body);
 
   try {
-    const { systemType = 'simplicity', promptKey = 'LOI_permanent_fixed_fields', contractNumber } = req.body;
+    const {
+      systemType = 'simplicity',
+      promptKey = 'LOI_permanent_fixed_fields',
+      contractNumber,
+      username: bodyUser,
+      password: bodyPass
+    } = req.body;
 
     if (!contractNumber) {
       console.error('[❌ No contract number provided]');
       return res.status(400).json({ message: 'Contract number is required' });
     }
 
-    if (!browserSessions.has(systemType)) {
-      console.error('[❌ Not logged in for system type]', systemType);
-      return res.status(401).json({ message: 'Not logged in for Simplicity' });
+    // 1) Source credentials from request body or environment
+    const user = bodyUser || process.env.SIMPLICITY_USER;
+    const pass = bodyPass || process.env.SIMPLICITY_PASS;
+    if (!user || !pass) {
+      console.error('[❌ Missing Simplicity credentials]');
+      return res.status(400).json({ message: 'Missing Simplicity username or password' });
     }
 
-    const { browser, page } = browserSessions.get(systemType);
-    const isLeaseOffer = contractNumber.includes('LO');
-    const submenuText = isLeaseOffer ? 'Lease Offer' : 'Lease Renewal';
+    // 2) Ensure browser session exists, otherwise log in
+    let session = browserSessions.get(systemType);
+    if (!session) {
+      console.log(`[Simplicity] No session for ${systemType}, logging in as ${user}...`);
+      const browser = await puppeteer.launch({ headless: true });
+      const page    = await browser.newPage();
+
+      // Navigate to Simplicity login page
+      await page.goto(process.env.SIMPLICITY_LOGIN_URL, { waitUntil: 'networkidle0' });
+      await page.type('#email', user);
+      await page.type('#password', pass);
+      await page.click('button[type="submit"]');
+      await page.waitForNavigation({ waitUntil: 'networkidle0' });
+
+      // (Optionally verify login success here)
+
+      browserSessions.set(systemType, { browser, page });
+      session = { browser, page };
+      console.log(`[✅ Logged in to ${systemType} as ${user}]`);
+    }
+
+    const { browser, page } = session;
+    const isLeaseOffer      = contractNumber.includes('LO');
+    const submenuText       = isLeaseOffer ? 'Lease Offer' : 'Lease Renewal';
 
     console.log(`[Simplicity] Navigating Lease > ${submenuText}...`);
     await page.waitForSelector('#menu_MenuLiteralDiv > ul > li:nth-child(10) > a', { timeout: 10000 });
@@ -764,7 +794,7 @@ app.post('/api/scrape-url', async (req, res) => {
 
     if (!submenuClicked) {
       console.error(`❌ Could not click ${submenuText}`);
-      throw new Error(`❌ Could not click ${submenuText}`);
+      throw new Error(`Could not click ${submenuText}`);
     }
 
     console.log(`✅ ${submenuText} clicked`);
@@ -772,166 +802,153 @@ app.post('/api/scrape-url', async (req, res) => {
 
     let scrapedText = '';
 
-    if (contractNumber) {
-      console.log('[Simplicity] Searching for contract number:', contractNumber);
-      await page.waitForSelector('iframe[name="frameBottom"]', { timeout: 70000 });
-      const iframeHandle = await page.$('iframe[name="frameBottom"]');
-      const frame = await iframeHandle.contentFrame();
-      if (!frame) {
-        console.error('❌ Could not access iframe content');
-        throw new Error('❌ Could not access iframe content');
-      }
+    console.log('[Simplicity] Searching for contract number:', contractNumber);
+    await page.waitForSelector('iframe[name="frameBottom"]', { timeout: 70000 });
+    const iframeHandle = await page.$('iframe[name="frameBottom"]');
+    const frame = await iframeHandle.contentFrame();
+    if (!frame) {
+      console.error('❌ Could not access iframe content');
+      throw new Error('Could not access iframe content');
+    }
 
-      await frame.waitForSelector('#panel_SimpleSearch_c1', { visible: true, timeout: 70000 });
-      console.log('[Simplicity] Typing and submitting contract number...');
-      await frame.evaluate((contract) => {
-        const input = document.querySelector('#panel_SimpleSearch_c1');
-        input.value = contract;
-        input.focus();
-      }, contractNumber);
+    await frame.waitForSelector('#panel_SimpleSearch_c1', { visible: true, timeout: 70000 });
+    console.log('[Simplicity] Typing and submitting contract number...');
+    await frame.evaluate((contract) => {
+      const input = document.querySelector('#panel_SimpleSearch_c1');
+      input.value = contract;
+      input.focus();
+    }, contractNumber);
 
-      // <<< REPLACED CLICK TECHNIQUE >>>
-      console.log('[Simplicity] Clicking search <a> button...');
-      await frame.waitForSelector('a#panel_buttonSearch_bt', { visible: true, timeout: 10000 });
-      await frame.evaluate(() => {
-        const btn = document.querySelector('a#panel_buttonSearch_bt');
-        if (btn) btn.click();
-      });
-      await new Promise(resolve => setTimeout(resolve, 15000));
+    console.log('[Simplicity] Clicking search button...');
+    await frame.waitForSelector('a#panel_buttonSearch_bt', { visible: true, timeout: 10000 });
+    await frame.evaluate(() => {
+      const btn = document.querySelector('a#panel_buttonSearch_bt');
+      if (btn) btn.click();
+    });
+    await new Promise(resolve => setTimeout(resolve, 15000));
 
-      console.log('[Simplicity] Clicking view icon...');
-      const viewButton = await frame.$('input[src*="view-black-16.png"]');
-      if (!viewButton) {
-        console.error('❌ View icon not found');
-        throw new Error('❌ View icon not found');
-      }
-      await viewButton.click();
+    console.log('[Simplicity] Clicking view icon...');
+    const viewButton = await frame.$('input[src*="view-black-16.png"]');
+    if (!viewButton) {
+      console.error('❌ View icon not found');
+      throw new Error('View icon not found');
+    }
+    await viewButton.click();
 
-      const popupUrlMatch = contractNumber.includes('LO')
+    const popupUrlMatch = contractNumber.includes('LO')
       ? 'leaseoffer/edit.aspx'
       : 'leaserenewal/edit.aspx';
 
-      // Clean up leftover popups
-      const oldPages = await browser.pages();
-      for (const p of oldPages) {
-        const url = p.url();
-        if (url.includes('leaseoffer/edit.aspx') || url.includes('leaserenewal/edit.aspx')) {
-          if (p !== page) await p.close();
-        }
+    // Close any old popups
+    const oldPages = await browser.pages();
+    for (const p of oldPages) {
+      const url = p.url();
+      if ((url.includes('leaseoffer/edit.aspx') || url.includes('leaserenewal/edit.aspx')) && p !== page) {
+        await p.close();
       }
+    }
 
-      // Now wait for the new popup
-      let popup;
-      for (let i = 0; i < 15; i++) {
-        const pages = await browser.pages();
-        popup = pages.find(p => p.url().includes(popupUrlMatch) && p !== page);
-        if (popup) break;
-        await new Promise(resolve => setTimeout(resolve, 2000));
-}
-    
+    // Wait for the new popup
+    let popup;
+    for (let i = 0; i < 15; i++) {
+      const pages = await browser.pages();
+      popup = pages.find(p => p.url().includes(popupUrlMatch) && p !== page);
+      if (popup) break;
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
     if (!popup) {
       console.error('❌ Popup window not found for:', popupUrlMatch);
-      throw new Error('❌ Popup window not found');
+      throw new Error('Popup window not found');
     }
 
+    await popup.bringToFront();
+    await popup.waitForFunction(() => document.body && document.body.innerText.trim().length > 0, { timeout: 60000 });
+    await popup.waitForNavigation({ waitUntil: 'networkidle2', timeout: 20000 }).catch(() => {});
 
+    const popupUrl = popup.url();
+    console.log('[Simplicity] Final popup URL:', popupUrl);
 
-
-      await popup.bringToFront();
-      await popup.waitForFunction(() => document.body && document.body.innerText.trim().length > 0, { timeout: 60000 });
-
-      await popup.waitForNavigation({ waitUntil: 'networkidle2', timeout: 20000 }).catch(() => {
-        console.warn('[⚠️ popup.waitForNavigation] Timeout or already loaded');
-      });
-
-      // build your TYPE value however you need, then…
-     // const encodedType = encodeURIComponent(typeValue);  // ← whatever logic you use to pick/type‐encode your TYPE
-      const popupUrl = popup.url();
-      console.log('[Simplicity] Final popup URL with params:', popupUrl);
-      
-      console.log('[Simplicity] Expanding all collapsible sections...');
-      const collapsibleIds = [
-        '#panelMonthlyCharge_label',
-        '#panelOtherMonthlyCharge_label',
-        '#panelGTO_label',
-        '#LeaseMeterTypessArea_label',
-        '#panelSecurityDeposit_label',
-        '#panelOneTimeCharge_label'
-      ];
-
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      for (const selector of collapsibleIds) {
-        try {
-          const isCollapsed = await popup.$eval(selector, el => el.classList.contains('collapsible-panel-collapsed'));
-          if (isCollapsed) {
-            await popup.click(selector);
-            console.log(`✅ Expanded: ${selector}`);
-            await popup.waitForTimeout(7000);
-          }
-        } catch (err) {
-          console.warn(`⚠️ Could not expand ${selector}:`, err.message);
-        }
-      }
-
-      scrapedText = await popup.evaluate(() => document.body.innerText);
-      console.log('[Simplicity] Scraped content:', scrapedText);
-
-      const promptFilePath = path.join(__dirname, 'prompts', `${promptKey}.txt`);
-      if (!fs.existsSync(promptFilePath)) {
-        console.error(`[❌ Prompt template '${promptKey}' not found.`);
-        return res.status(400).json({ message: `Prompt template '${promptKey}' not found.` });
-      }
-
-      const promptTemplate = fs.readFileSync(promptFilePath, 'utf8');
-      const finalPrompt = `${promptTemplate}\n\nContent:\n${scrapedText}`;
-
-      console.log('[Simplicity] Sending content to Gemini model...');
-      const geminiRes = await model.generateContent(finalPrompt);
-      const geminiText = await geminiRes.response.text();
-
-      let contractId = contractNumber || 'unknown_scrape_id';
-      let leaseType = '';
-      let workflowStatus = '';
-      let tenantType = '';
-
+    console.log('[Simplicity] Expanding collapsible sections...');
+    const collapsibleIds = [
+      '#panelMonthlyCharge_label',
+      '#panelOtherMonthlyCharge_label',
+      '#panelGTO_label',
+      '#LeaseMeterTypessArea_label',
+      '#panelSecurityDeposit_label',
+      '#panelOneTimeCharge_label'
+    ];
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    for (const selector of collapsibleIds) {
       try {
-        const match = geminiText.match(/"Contract Number"\s*:\s*"([^"]+)"/);
-        if (match) contractId = match[1].replace(/\//g, '_');
-
-        const leaseTypeMatch = geminiText.match(/"Lease Type"\s*:\s*"([^"]+)"/);
-        if (leaseTypeMatch) leaseType = leaseTypeMatch[1];
-
-        const workflowStatusMatch = geminiText.match(/"Workflow status"\s*:\s*"([^"]+)"/);
-        if (workflowStatusMatch) workflowStatus = workflowStatusMatch[1];
-
-        const tenantTypeMatch = geminiText.match(/"Tenant Type"\s*:\s*"([^"]+)"/);
-        if (tenantTypeMatch) tenantType = tenantTypeMatch[1];
-
-        console.log('[📄 Scrape Contract ID]', contractId, '[Lease Type]', leaseType, '[Workflow Status]', workflowStatus);
+        const isCollapsed = await popup.$eval(selector, el => el.classList.contains('collapsible-panel-collapsed'));
+        if (isCollapsed) {
+          await popup.click(selector);
+          console.log(`✅ Expanded: ${selector}`);
+          await popup.waitForTimeout(7000);
+        }
       } catch (err) {
-        console.warn('[⚠️ Could not extract fields from Scrape Gemini]', err.message);
+        console.warn(`⚠️ Could not expand ${selector}:`, err.message);
       }
-
-      await db.collection('compare_result').doc(contractId).set({
-        timestamp: new Date(),
-        contract_number: contractId,
-        web_extracted: scrapedText,
-        gemini_output: geminiText, // ✅ ADD THIS
-        lease_type: leaseType,
-        workflow_status: workflowStatus,
-        tenant_type: tenantType,
-        popup_url: popupUrl,
-      }, { merge: true });
-
-      console.log(`[🔥 Firebase] Document saved to 'compare_result': ${contractId}`);
-
-      res.json({ 
-        success: true,
-        raw: scrapedText,
-        geminiOutput: geminiText,
-        popupUrl
-      });
     }
+
+    scrapedText = await popup.evaluate(() => document.body.innerText);
+    console.log('[Simplicity] Scraped content length:', scrapedText.length);
+
+    // Load prompt template
+    const promptFilePath = path.join(__dirname, 'prompts', `${promptKey}.txt`);
+    if (!fs.existsSync(promptFilePath)) {
+      console.error(`[❌ Prompt template '${promptKey}' not found.]`);
+      return res.status(400).json({ message: `Prompt template '${promptKey}' not found.` });
+    }
+    const promptTemplate = fs.readFileSync(promptFilePath, 'utf8');
+    const finalPrompt    = `${promptTemplate}\n\nContent:\n${scrapedText}`;
+
+    console.log('[Simplicity] Sending content to Gemini model...');
+    const geminiRes  = await model.generateContent(finalPrompt);
+    const geminiText = await geminiRes.response.text();
+
+    // Extract key fields from Gemini JSON
+    let contractId      = contractNumber.replace(/\//g, '_');
+    let leaseType       = '';
+    let workflowStatus  = '';
+    let tenantType      = '';
+
+    try {
+      const match = geminiText.match(/"Contract Number"\s*:\s*"([^"]+)"/);
+      if (match) contractId = match[1].replace(/\//g, '_');
+      const ltMatch = geminiText.match(/"Lease Type"\s*:\s*"([^"]+)"/);
+      if (ltMatch) leaseType = ltMatch[1];
+      const wsMatch = geminiText.match(/"Workflow status"\s*:\s*"([^"]+)"/);
+      if (wsMatch) workflowStatus = wsMatch[1];
+      const ttMatch = geminiText.match(/"Tenant Type"\s*:\s*"([^"]+)"/);
+      if (ttMatch) tenantType = ttMatch[1];
+      console.log('[📄 Scrape Contract ID]', contractId, '[Lease Type]', leaseType, '[Workflow Status]', workflowStatus);
+    } catch (err) {
+      console.warn('[⚠️ Could not extract fields from Gemini]', err.message);
+    }
+
+    // Save to Firestore
+    await db.collection('compare_result').doc(contractId).set({
+      timestamp: new Date(),
+      contract_number: contractId,
+      web_extracted: scrapedText,
+      gemini_output: geminiText,
+      lease_type: leaseType,
+      workflow_status: workflowStatus,
+      tenant_type: tenantType,
+      popup_url: popupUrl
+    }, { merge: true });
+
+    console.log(`[🔥 Firebase] Document saved: ${contractId}`);
+
+    // Respond
+    res.json({
+      success: true,
+      raw: scrapedText,
+      geminiOutput: geminiText,
+      popupUrl
+    });
+
   } catch (err) {
     console.error('[Simplicity scrape-url error]', err);
     res.status(500).json({ message: 'Error during Simplicity navigation', error: err.message });
