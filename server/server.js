@@ -15,26 +15,25 @@ import { dirname } from 'path';
 
 
 import dotenv from 'dotenv';
-// ─── Load environment ────────────────────────────────
 dotenv.config({
   path: `.env.${process.env.NODE_ENV || 'development'}`
 });
-
-// ─── Constants & Helpers ────────────────────────────
 const FOLDER_PATH = path.join(process.cwd(), 'contracts');
 
 // Support __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-// ─── Puppeteer session store ────────────────────────
+// ✅ Store Puppeteer sessions for different systems
 const browserSessions = new Map();
+// Env and Express setup
 
-// ─── Express setup ──────────────────────────────────
+
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-// ─── CORS ────────────────────────────────────────────
+// read comma-separated list of allowed origins from env
+// replace your cors block in server.js with:
+
 const isDev = process.env.NODE_ENV === 'development';
 const allowedOrigins = isDev
   ? ['http://localhost:3000']
@@ -46,11 +45,9 @@ const allowedOrigins = isDev
 console.log('⚙️  CORS allowed origins:', allowedOrigins);
 
 app.use(cors({
-  origin: (incomingOrigin, callback) => {
-    if (!incomingOrigin || allowedOrigins.includes(incomingOrigin)) {
-      return callback(null, true);
-    }
-    callback(new Error(`CORS policy: origin ${incomingOrigin} not allowed`));
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS policy: origin ${origin} not allowed`));
   },
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   credentials: true
@@ -184,8 +181,24 @@ const serviceAccount = JSON.parse(
 */
 // NEW – picks up GOOGLE_APPLICATION_CREDENTIALS for you
 
+let credential;
+if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+  try {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    credential = admin.credential.cert(serviceAccount);
+    console.log('✅ Using FIREBASE_SERVICE_ACCOUNT_JSON credentials');
+  } catch (e) {
+    console.error('❌ Invalid FIREBASE_SERVICE_ACCOUNT_JSON:', e);
+    process.exit(1);
+  }
+} else {
+  // only use applicationDefault in local/dev (with GOOGLE_APPLICATION_CREDENTIALS file)
+  credential = admin.credential.applicationDefault();
+  console.log('ℹ️ Using applicationDefault() credentials');
+}
+
 admin.initializeApp({
-  credential: admin.credential.applicationDefault(),
+  credential,
   storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
 });
 const db = admin.firestore();
