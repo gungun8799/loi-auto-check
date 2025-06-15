@@ -58,7 +58,6 @@ const [exportTo, setExportTo] = useState('');     // e.g. "2025-06-10"
     const [successMessage, setSuccessMessage] = useState(null);
     const [errorAuto, setErrorAuto] = useState(null);
     const [sharepointPath, setSharepointPath] = useState('');
-    const API_URL = process.env.REACT_APP_API_URL || '${API_URL}';
 
 
   // ─── Failsafe states ─────────────────────────────────────────────────────────
@@ -398,11 +397,11 @@ const exportBetween = (fromRaw, toRaw) => {
         alert('✅ Forced processing complete.');
   
         // Re-fetch the latest compare results and refresh state
-        const res = await api.get('/get-compare-results');
-        if (getRes.data.success && Array.isArray(getRes.data.data)) {
-          setContracts(getRes.data.data);
-          setFilteredContracts(getRes.data.data);
-          computeWeeklyStats(getRes.data.data);
+        const { data } = await api.get('/get-compare-results');
+        if (data.success && Array.isArray(data.data)) {
+          setContracts(data.data);
+          setFilteredContracts(data.data);
+          computeWeeklyStats(data.data);
         }
       } else {
         alert('❌ Failed to start forced process.');
@@ -843,7 +842,7 @@ const getContractDate = (ts) => {
               <button
                 className={styles.buttonOpenPopup}
                 onClick={() => {
-                  axios
+                  api
                     .post('/api/open-popup-tab', {
                       systemType:      'simplicity',
                       contractNumber:  contract.contract_number.replace(/_/g, '/'),

@@ -34,4 +34,4 @@ server/*-sdk-*.json
 server/gen-lang-client-*.jsonserver/loi-checker-firebase-adminsdk-fbsvc-e5de01d327.json
 
 # Ignore all environment files
-.env*
+.env*clean-repo/
