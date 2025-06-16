@@ -2732,7 +2732,7 @@ app.post('/api/check-contract-status', async (req, res) => {
 
   try {
     // ─── DELEGATE TO REMOTE SERVICE IF CONFIGURED ─────────────────────────────
-    /*
+    
     if (process.env.PUPPETEER_SERVICE_URL) {
       console.log('[STEP] delegating status check to remote Puppeteer service]');
       const { data } = await axios.post(
@@ -2746,7 +2746,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       }
       return res.json({ success: true, status: data.status });
     }
-    */
+    
 
     // ─── Otherwise, run local Puppeteer logic ─────────────────────────────────
     const systemType = 'simplicity';
