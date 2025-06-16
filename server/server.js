@@ -2649,21 +2649,21 @@ app.post('/api/check-contract-status', async (req, res) => {
     const isLocal = process.env.NODE_ENV !== 'production';
     console.log(`[STEP] Running in ${isLocal ? 'local (headed)' : 'production (headless)'} mode`);
 
-    const launchOptions = isLocal
-      ? {
-          headless: false,
-          defaultViewport: null,
-          args: ['--start-fullscreen']
-        }
-      : {
-          headless: true,
-          args: [
+    const launchOptions = {
+      headless: !isLocal,
+      args: isLocal
+        ? ['--start-fullscreen']
+        : [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu'
           ],
-          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH
+      // only set executablePath in production if the env var is present
+      ...( !isLocal && process.env.PUPPETEER_EXECUTABLE_PATH
+        ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
+        : {}
+      )
         };
 
     if (!browserSessions.has(systemType)) {
