@@ -2697,7 +2697,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       message: 'Skipped: invalid filename format'
     });
   }
-  /*
+  
   if (process.env.PUPPETEER_SERVICE_URL) {
     console.log('[STEP] delegating status check to remote Puppeteer service');
     try {
@@ -2714,7 +2714,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       return res.status(502).json({ success: false, message: 'Remote service error', error: err.response?.data || err.message });
     }
   }
-  */
+  
   const user = process.env.SIMPLICITY_USER;
   const pass = process.env.SIMPLICITY_PASS;
   if (!user || !pass) {
