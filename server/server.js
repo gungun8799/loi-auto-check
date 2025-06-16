@@ -124,10 +124,13 @@ app.get('/api/chrome-paths', (req, res) => {
   ];
   const found = candidates
     .filter(p => fs.existsSync(p))
-    .map(p => ({ path: p, version: require('child_process')
-        .execSync(`${p} --version`)
-        .toString()
-        .trim() }));
+    .map(p => {
+      let version = 'unknown';
+      try {
+        version = execSync(`${p} --version`, { encoding: 'utf8' }).trim();
+      } catch {}
+      return { path: p, version };
+    });
   res.json({ found, all: candidates });
 });
 
