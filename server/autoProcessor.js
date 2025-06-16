@@ -117,11 +117,11 @@ async function processOneContract(filename) {
     ocrForm.append('file', fs.createReadStream(filePath));
     ocrForm.append('pages', 'all');
 
-     const ocrRes = await axios.post(
-         `${BASE_URL}/api/extract-text-only`,
-         ocrForm,
-         { headers: ocrForm.getHeaders() }
-       );
+    const ocrRes = await axios.post(
+      `${BASE_URL}/api/extract-text-only`,
+      ocrForm,
+      { headers: ocrForm.getHeaders() }
+    );
     const ocrText = ocrRes.data?.text;
     if (!ocrText) throw new Error('No OCR text received from /api/extract-text-only');
 
@@ -135,189 +135,189 @@ async function processOneContract(filename) {
     console.log(`[📌 Prompt selected based on contract type] ${promptKey}`);
 
     // ─── Step 2: Direct API extract (bypass the UI entirely) ───────────────
-console.log(`[🔁 Calling ${BASE_URL}/api/extract-text for OCR & Gemini]`);
-const extractForm = new FormData();
-extractForm.append('files', fs.createReadStream(filePath), path.basename(filePath));
-extractForm.append('pages', 'all');
-extractForm.append('promptKey', promptKey);
+    console.log(`[🔁 Calling ${BASE_URL}/api/extract-text for OCR & Gemini]`);
+    const extractForm = new FormData();
+    extractForm.append('files', fs.createReadStream(filePath), path.basename(filePath));
+    extractForm.append('pages', 'all');
+    extractForm.append('promptKey', promptKey);
 
-// 2.1) Extract text + Gemini via backend
-let extractRes;
-try {
-  extractRes = await axios.post(
-    `${BASE_URL}/api/extract-text`,
-    extractForm,
-    { headers: extractForm.getHeaders() }
-  );
-} catch (err) {
-  console.error('[❌ extract-text failed]', err.response?.data || err.message);
-  throw err;
-}
-const extractedText = extractRes.data.text;
-const geminiOut     = extractRes.data.geminiOutput;
-console.log('[✅ Backend extract complete]');
+    // 2.1) Extract text + Gemini via backend
+    let extractRes;
+    try {
+      extractRes = await axios.post(
+        `${BASE_URL}/api/extract-text`,
+        extractForm,
+        { headers: extractForm.getHeaders() }
+      );
+    } catch (err) {
+      console.error('[❌ extract-text failed]', err.response?.data || err.message);
+      throw err;
+    }
+    const extractedText = extractRes.data.text;
+    const geminiOut     = extractRes.data.geminiOutput;
+    console.log('[✅ Backend extract complete]');
 
-// 2.2) Parse out the Contract Number from Gemini output
-let parsedPdf;
-try {
-  const raw = geminiOut
-    .trim()
-    .replace(/^```json\s*/i, '')
-    .replace(/```$/, '');
-  parsedPdf = JSON.parse(raw);
-} catch (e) {
-  console.error('[❌ Failed to parse Gemini JSON]', e.message);
-  throw e;
-}
-const extractedContractNumber = parsedPdf['Contract Number'];
-const contractId = extractedContractNumber.replace(/\//g, '_');
-console.log(`[🔖 Extracted Contract Number] ${extractedContractNumber}`);
+    // 2.2) Parse out the Contract Number from Gemini output
+    let parsedPdf;
+    try {
+      const raw = geminiOut
+        .trim()
+        .replace(/^```json\s*/i, '')
+        .replace(/```$/, '');
+      parsedPdf = JSON.parse(raw);
+    } catch (e) {
+      console.error('[❌ Failed to parse Gemini JSON]', e.message);
+      throw e;
+    }
+    const extractedContractNumber = parsedPdf['Contract Number'];
+    const contractId = extractedContractNumber.replace(/\//g, '_');
+    console.log(`[🔖 Extracted Contract Number] ${extractedContractNumber}`);
 
-// ─── Step 2.2.5: Ensure we’re logged in to Simplicity ───────────────────
- console.log('[🔐 Logging in to Simplicity]');
- await axios.post(
-   `${BASE_URL}/api/scrape-login`,
-   { systemType: 'simplicity' },      // no creds needed in the bundle
-   { withCredentials: true }
- );
-  console.log('[✅ Logged in to Simplicity]');
-} catch (err) {
-  console.error('[❌ Simplicity login failed]', err.response?.data || err.message);
-  throw err;
-}
+    // ─── Step 2.2.5: Ensure we’re logged in to Simplicity ───────────────────
+    try {
+      console.log('[🔐 Logging in to Simplicity]');
+      await axios.post(
+        `${BASE_URL}/api/scrape-login`,
+        { systemType: 'simplicity' },      // no creds needed in the bundle
+        { withCredentials: true }
+      );
+      console.log('[✅ Logged in to Simplicity]');
+    } catch (err) {
+      console.error('[❌ Simplicity login failed]', err.response?.data || err.message);
+      throw err;
+    }
 
-// 2.3) Auto‐scrape Simplicity for the extracted contract
-console.log(`[🔐 Auto-scrape for ${extractedContractNumber}]`);
-let scrapeRes;
-try {
-     scrapeRes = await axios.post(
-         `${BASE_URL}/api/scrape-url`,
-         {
-           systemType:     'simplicity',
-           promptKey,
-           contractNumber: extractedContractNumber,
-           username:       process.env.SIMPLICITY_USER,
-           password:       process.env.SIMPLICITY_PASS,
-         },
-         { withCredentials: true }
-       );
-} catch (err) {
-  console.error('[❌ scrape-url request failed]', err.response?.data || err.message);
-  throw err;
-}
+    // 2.3) Auto‐scrape Simplicity for the extracted contract
+    console.log(`[🔐 Auto-scrape for ${extractedContractNumber}]`);
+    let scrapeRes;
+    try {
+      scrapeRes = await axios.post(
+        `${BASE_URL}/api/scrape-url`,
+        {
+          systemType:     'simplicity',
+          promptKey,
+          contractNumber: extractedContractNumber,
+          username:       process.env.SIMPLICITY_USER,
+          password:       process.env.SIMPLICITY_PASS,
+        },
+        { withCredentials: true }
+      );
+    } catch (err) {
+      console.error('[❌ scrape-url request failed]', err.response?.data || err.message);
+      throw err;
+    }
 
-if (!scrapeRes.data.success) {
-  throw new Error(`Scrape-URL failed: ${scrapeRes.data.message}`);
-}
+    if (!scrapeRes.data.success) {
+      throw new Error(`Scrape-URL failed: ${scrapeRes.data.message}`);
+    }
 
-const webRaw       = scrapeRes.data.raw;
-const webGeminiRaw = scrapeRes.data.geminiOutput;
-const popupUrl     = scrapeRes.data.popupUrl;
-console.log('[✅ Web scrape complete]');
-console.log('[✅ Web scrape complete]');
+    const webRaw       = scrapeRes.data.raw;
+    const webGeminiRaw = scrapeRes.data.geminiOutput;
+    const popupUrl     = scrapeRes.data.popupUrl;
+    console.log('[✅ Web scrape complete]');
+    console.log('[✅ Web scrape complete]');
 
     // 2.4) Parse the web‐scrape Gemini JSON
-    let parsedWeb
+    let parsedWeb;
     try {
-      let t = webGeminiRaw.trim().replace(/^```json\s*/i, '').replace(/```$/, '')
-      const b1 = t.indexOf('{'), b2 = t.lastIndexOf('}')
-      parsedWeb = JSON.parse(t.slice(b1, b2 + 1))
+      let t = webGeminiRaw.trim().replace(/^```json\s*/i, '').replace(/```$/, '');
+      const b1 = t.indexOf('{'), b2 = t.lastIndexOf('}');
+      parsedWeb = JSON.parse(t.slice(b1, b2 + 1));
     } catch (e) {
-      throw new Error('Failed to parse web Gemini JSON: ' + e.message)
+      throw new Error('Failed to parse web Gemini JSON: ' + e.message);
     }
 
     // 2.5) Gemini Compare
-    const formattedSources = { pdf: parsedPdf, web: parsedWeb }
+    const formattedSources = { pdf: parsedPdf, web: parsedWeb };
     const cmpRes = await axios.post(`${BASE_URL}/api/gemini-compare`, {
-       
       formattedSources,
       promptKey,
-    })
+    });
     let cmpRaw = cmpRes.data.response.trim()
-    .replace(/^```json\s*/i, '')
-    .replace(/```$/, '')
-  
-    // ─── Sanitize invalid escape sequences ──────────────────────────────────────
-    // 1) Remove any stray control characters (optional)
-    // 2) Escape any backslash that isn’t already part of a valid escape
-    const sanitized = cmpRaw
-      // strip out non-printable control chars (0x00–0x1F)
-      .replace(/[\u0000-\u001F]+/g, '')
-      // escape any standalone backslashes
-      .replace(/\\(?!["\\/bfnrtu])/g, '\\\\')
-    
-    let compareResult
-    try {
-      compareResult = JSON.parse(sanitized)
-    } catch (e) {
-      console.error('[❌ Failed to parse sanitized compare JSON]', e.message)
-      throw e
-    }
+      .replace(/^```json\s*/i, '')
+      .replace(/```$/, '');
 
+    // ─── Sanitize invalid escape sequences ──────────────────────────────────────
+    const sanitized = cmpRaw
+      .replace(/[\u0000-\u001F]+/g, '')
+      .replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+
+    let compareResult;
+    try {
+      compareResult = JSON.parse(sanitized);
+    } catch (e) {
+      console.error('[❌ Failed to parse sanitized compare JSON]', e.message);
+      throw e;
+    }
 
     // 2.7) Document Validation
     const docValRes = await axios.post(`${BASE_URL}/api/validate-document`, {
       extractedData: parsedPdf,
       promptKey,
-    })
+    });
     let val = docValRes.data.validation.trim()
       .replace(/^```json\s*/i, '')
-      .replace(/```$/, '')
-    const validationResult = JSON.parse(val)
+      .replace(/```$/, '');
+    const validationResult = JSON.parse(val);
     await axios.post(`${BASE_URL}/api/save-validation-result`, {
       contractNumber:    contractId,
       validationResult,
-    })
-    console.log('[✅ Saved validation_result]')
+    });
+    console.log('[✅ Saved validation_result]');
 
     // 2.8) Web Validation
     const webValRes = await axios.post(`${BASE_URL}/api/web-validate`, {
       contractNumber:  extractedContractNumber,
       extractedData:   parsedWeb,
       promptKey,
-    })
-    const webValidation = webValRes.data.validationResult
+    });
+    const webValidation = webValRes.data.validationResult;
     if (Array.isArray(webValidation)) {
       await axios.post(`${BASE_URL}/api/save-validation-result`, {
         contractNumber:    contractId,
         validationResult:  webValidation,
-      })
-      console.log('[✅ Saved web_validation_result]')
+      });
+      console.log('[✅ Saved web_validation_result]');
     } else {
-      console.warn('[⚠️ Web validation returned no array; skipping save]')
+      console.warn('[⚠️ Web validation returned no array; skipping save]');
     }
 
     // 2.9) Finally save compare + both validations in one shot
-const fullPayload = {
-  contractNumber:  contractId,
-  compareResult,
-  pdfGemini:       geminiOut,
-  webGemini:       webGeminiRaw,
-  validationResult,        // your document‐validation array
-  webValidationResult: webValidation,  // your web‐validation array
-  popupUrl
-};
-try {
-  const { data } = await axios.post(
-    `${BASE_URL}/api/save-compare-result`,
-    fullPayload,
-    { withCredentials: true }
-  );
-  if (!data.success) {
-    console.error('[❌ Save failed]', data);
-    return false;
+    const fullPayload = {
+      contractNumber:       contractId,
+      compareResult,
+      pdfGemini:            geminiOut,
+      webGemini:            webGeminiRaw,
+      validationResult,
+      webValidationResult:  webValidation,
+      popupUrl
+    };
+    try {
+      const { data } = await axios.post(
+        `${BASE_URL}/api/save-compare-result`,
+        fullPayload,
+        { withCredentials: true }
+      );
+      if (!data.success) {
+        console.error('[❌ Save failed]', data);
+        return false;
+      }
+      console.log('[✅ Saved compare + validations together]');
+      return true;
+    } catch (err) {
+      console.error(
+        '[❌ Error during processing]',
+        err.response?.data || err.message || err
+      );
+      try { await browser.close(); } catch {}
+      return false;
+    }
+
+  } catch (outerErr) {
+    // This now correctly catches *any* error* from the entire flow
+    console.error('[❌ Error during processing]', outerErr.message || outerErr);
+    throw outerErr;
   }
-  console.log('[✅ Saved compare + validations together]');
-  return true;
-} catch (err) {
-  console.error(
-    '[❌ Error during processing]',
-    err.response?.data || err.message || err
-  );
-  // close Puppeteer so the caller can mark this PDF as “failed”
-  try { await browser.close(); } catch {}
-  return false;
-}
 }
 
 async function checkIfFileExistsInFirebase(file) {
