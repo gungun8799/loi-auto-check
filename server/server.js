@@ -938,7 +938,7 @@ app.post('/api/scrape-url', async (req, res) => {
     await frame.evaluate(() => {
       document.querySelector('a#panel_buttonSearch_bt')?.click();
     });
-    await new Promise(r => setTimeout(r, 30000));
+    await new Promise(r => setTimeout(r, 60000));
 
     console.log('[Simplicity] Clicking view icon...');
     const viewButton = await frame.$('input[src*="view-black-16.png"]');
