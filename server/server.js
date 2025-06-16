@@ -2560,15 +2560,18 @@ async function checkIfFileExistsInFirebase(filename) {
       console.log(`[✅ STEP 1: Not found] ${contractNumber} not yet in compare_result. Skipping timestamp check.`);
     }
 
-  // ✅ STEP 3: Check Simplicity contract status (local or remote Puppeteer service)
-  console.log(`[STEP 3] 📄 Checking Simplicity status for ${contractNumber}...`);
-  const serviceUrl = process.env.PUPPETEER_SERVICE_URL || 'http://localhost:5001';
-  const statusRes = await axios.post(
-    `${serviceUrl}/api/check-contract-status`,
-    { contractNumber }
-  );
-  const contractStatus = statusRes.data?.status || '';
+  // in your client‐side code (processOneContract, auto‐scrape, etc.)
+const serviceUrl =
+process.env.NODE_ENV === 'production' && process.env.PUPPETEER_SERVICE_URL
+  ? process.env.PUPPETEER_SERVICE_URL
+  : 'http://localhost:5001';
 
+console.log(`[STEP 3] 📄 Checking Simplicity status for ${contractNumber}…`);
+const statusRes = await axios.post(
+`${serviceUrl}/api/check-contract-status`,
+{ contractNumber }
+);
+const contractStatus = statusRes.data?.status || '';
     console.log(`[STEP 3] 🔍 Contract status = "${contractStatus}"`);
     /*
     if (contractStatus.trim() !== 'Pending Verification') {
@@ -2606,15 +2609,17 @@ app.post('/api/update-verified-status', async (req, res) => {
 });
 
 
+// Make sure at the top of server.js you have:
+// import dotenv from 'dotenv';
+// dotenv.config();
+
 app.post('/api/check-contract-status', async (req, res) => {
-  // 1) Read `contractNumber` explicitly from req.body
   const contractNumber = req.body.contractNumber;
   if (!contractNumber) {
     return res.status(400).json({ message: 'Missing contractNumber' });
   }
   const validPattern = /^\d+_(?:LO|LR)\d+_\d+$/;
   if (!validPattern.test(contractNumber)) {
-    // Return “processed” right away so the caller won’t launch Puppeteer
     return res.json({
       success: true,
       status: null,
@@ -2622,62 +2627,70 @@ app.post('/api/check-contract-status', async (req, res) => {
     });
   }
 
+  const user = process.env.SIMPLICITY_USER;
+  const pass = process.env.SIMPLICITY_PASS;
+  if (!user || !pass) {
+    console.error('[ERROR] Missing SIMPLICITY_USER or SIMPLICITY_PASS');
+    return res.status(500).json({ message: 'Server misconfiguration: missing credentials' });
+  }
+
+  // Button selectors
+  const continueSel1 = '#root > div > div > div.sc-dymIpo.izSiFn ' +
+    '> div.withConditionalBorder.sc-bnXvFD.izlagV ' +
+    '> div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(3) > div > button';
+  const continueSel2 = '#root > div > div > div.sc-dymIpo.izSiFn ' +
+    '> div.withConditionalBorder.sc-bnXvFD.izlagV ' +
+    '> div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(4) > div > button';
+
   try {
     const systemType = 'simplicity';
     let browser, page;
 
-    // Hoist these selectors so both login branches can use them
-    const continueSel1 = '#root > div > div > div.sc-dymIpo.izSiFn > div.withConditionalBorder.sc-bnXvFD.izlagV > div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(3) > div > button';
-    const continueSel2 = '#root > div > div > div.sc-dymIpo.izSiFn > div.withConditionalBorder.sc-bnXvFD.izlagV > div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(4) > div > button';
+    const isLocal = process.env.NODE_ENV !== 'production';
+    console.log(`[STEP] Running in ${isLocal ? 'local (headed)' : 'production (headless)'} mode`);
 
-    if (process.env.PUPPETEER_SERVICE_URL) {
-      console.log('[STEP] delegating login to remote Puppeteer service]');
-      const { data } = await axios.post(
-        `${process.env.PUPPETEER_SERVICE_URL}/api/scrape-login`,
-        { systemType, username, password }
-      );
-      if (!data.success) {
-        return res.status(401).json(data);
-      }
-      console.log('[STEP] remote login succeeded]');
-      return res.json(data);
-    }
-    
+    const launchOptions = isLocal
+      ? {
+          headless: false,
+          defaultViewport: null,
+          args: ['--start-fullscreen']
+        }
+      : {
+          headless: true,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu'
+          ],
+          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH
+        };
+
     if (!browserSessions.has(systemType)) {
-      // Fresh, local Puppeteer login
-      console.log('[STEP] launching browser/session locally');
-      const isProd = process.env.NODE_ENV === 'production';
-      const launchOptions = {
-        headless: isProd,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          ...(isProd ? ['--disable-dev-shm-usage','--disable-gpu'] : [])
-        ],
-        ...(isProd && {
-          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
-        })
-      };
+      console.log('[STEP] launching new Puppeteer session');
       browser = await puppeteer.launch(launchOptions);
       page    = await browser.newPage();
-      browserSessions.set(systemType, { browser, page });
 
-      console.log('[STEP] going to apptop.aspx');
+      // ─── LOGIN ─────────────────────────────────────────────
+      console.log('[STEP] navigating to Simplicity login');
       await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
 
-      console.log('[STEP] waiting for "go to login" button');
+      console.log('[STEP] clicking “go to login”');
       await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 20000 });
-      console.log('[STEP] clicking "go to login"');
-      await page.click('#lblToLoginPage');
+      await Promise.all([
+        page.click('#lblToLoginPage'),
+        page.waitForNavigation({ waitUntil: 'networkidle2' })
+      ]);
 
       console.log('[STEP] waiting 5s for username form');
       await new Promise(r => setTimeout(r, 5000));
 
       console.log('[STEP] typing username');
       await page.waitForSelector('input#username', { visible: true, timeout: 20000 });
-      await page.type('input#username', 'john.pattanakarn@lotuss.com', { delay: 50 });
+      await page.type('input#username', user.toString(), { delay: 50 });
+
+      console.log('[STEP] clicking Continue #1');
       await page.waitForSelector(continueSel1, { visible: true, timeout: 20000 });
-      console.log('[STEP] clicking username Continue');
       await page.click(continueSel1);
 
       console.log('[STEP] waiting 5s for password form');
@@ -2685,126 +2698,64 @@ app.post('/api/check-contract-status', async (req, res) => {
 
       console.log('[STEP] typing password');
       await page.waitForSelector('input#password', { visible: true, timeout: 20000 });
-      await page.type('input#password', 'Gofresh@0425-21', { delay: 50 });
+      await page.type('input#password', pass.toString(), { delay: 50 });
+
+      console.log('[STEP] clicking Continue #2');
       await page.waitForSelector(continueSel2, { visible: true, timeout: 20000 });
-      console.log('[STEP] clicking password Continue');
-      await page.click(continueSel2);
+      await Promise.all([
+        page.click(continueSel2),
+        page.waitForNavigation({ waitUntil: 'networkidle2' })
+      ]);
 
       console.log('[STEP] waiting 15s for post-login settle');
       await new Promise(r => setTimeout(r, 15000));
 
-      console.log('[STEP] verifying login succeeded');
       const html = await page.content();
       if (html.includes('Invalid login')) {
-        console.log('[ERROR] Invalid credentials');
+        console.error('[ERROR] Invalid credentials');
         await browser.close();
         return res.status(401).json({ message: 'Invalid credentials' });
       }
+      console.log('[STEP] Simplicity login complete');
 
-      console.log('[STEP] storing session');
       browserSessions.set(systemType, { browser, page });
-
     } else {
-      // Reuse or fallback login
-      console.log('[STEP] reusing existing session');
-      try {
-        ({ browser, page } = browserSessions.get(systemType));
-
-        // Close any extra tabs/popups so we start fresh
-        const pagesNow = await browser.pages();
-        for (let i = 1; i < pagesNow.length; i++) {
-          try { await pagesNow[i].close(); } catch {}
-        }
-
-        // Reload the landing page to clear old iframes/state
-        await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
-        await page.waitForTimeout(2000);
-
-      } catch (reuseErr) {
-        console.warn('[WARN] Existing session invalid, clearing and re-logging in:', reuseErr.message);
-        browserSessions.delete(systemType);
-
-        // Fallback to fresh login logic
-        console.log('[STEP] launching browser/session');
-        const isProd = process.env.NODE_ENV === 'production';
-        const launchOpts = {
-          headless: isProd,
-          args: ['--no-sandbox', '--disable-setuid-sandbox', ...(isProd ? ['--disable-dev-shm-usage','--disable-gpu'] : [])],
-          ...(isProd && { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome' })
-        };
-
-        browser = await puppeteer.launch(launchOpts);
-        page    = await browser.newPage();
-        console.log('[STEP] going to apptop.aspx');
-        await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
-
-        console.log('[STEP] waiting for "go to login" button');
-        await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 20000 });
-        console.log('[STEP] clicking "go to login"');
-        await page.click('#lblToLoginPage');
-
-        console.log('[STEP] waiting 5s for username form');
-        await new Promise(r => setTimeout(r, 5000));
-
-        console.log('[STEP] typing username');
-        await page.waitForSelector('input#username', { visible: true, timeout: 20000 });
-        await page.type('input#username', 'john.pattanakarn@lotuss.com', { delay: 50 });
-        await page.waitForSelector(continueSel1, { visible: true, timeout: 20000 });
-        console.log('[STEP] clicking username Continue');
-        await page.click(continueSel1);
-
-        console.log('[STEP] waiting 5s for password form');
-        await new Promise(r => setTimeout(r, 5000));
-
-        console.log('[STEP] typing password');
-        await page.waitForSelector('input#password', { visible: true, timeout: 20000 });
-        await page.type('input#password', 'Gofresh@0425-21', { delay: 50 });
-        await page.waitForSelector(continueSel2, { visible: true, timeout: 20000 });
-        console.log('[STEP] clicking password Continue');
-        await page.click(continueSel2);
-
-        console.log('[STEP] waiting 15s for post-login settle');
-        await new Promise(r => setTimeout(r, 15000));
-
-        console.log('[STEP] verifying login succeeded');
-        const html2 = await page.content();
-        if (html2.includes('Invalid login')) {
-          console.log('[ERROR] Invalid credentials');
-          await browser.close();
-          return res.status(401).json({ message: 'Invalid credentials' });
-        }
-
-        console.log('[STEP] storing session');
-        browserSessions.set(systemType, { browser, page });
+      console.log('[STEP] reusing existing Puppeteer session');
+      ({ browser, page } = browserSessions.get(systemType));
+      const pages = await browser.pages();
+      for (let i = 1; i < pages.length; i++) {
+        await pages[i].close().catch(() => {});
       }
+      await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
+      await new Promise(r => setTimeout(r, 2000));
     }
 
-    // Small buffer before interacting
-    await new Promise(r => setTimeout(r, 10000));
+    // small buffer
+    await new Promise(r => setTimeout(r, 5000));
 
     // ─── STATUS CHECK ────────────────────────────────────────────────────────
     console.log('[STEP] clicking Lease menu');
     await page.click('#menu_MenuLiteralDiv > ul > li:nth-child(10) > a');
+    await new Promise(r => setTimeout(r, 500));
+
     console.log('[STEP] hovering Lease submenu');
-    await new Promise(r => setTimeout(r, 5000));
     await page.evaluate(() => {
-      const leaseMenu = [...document.querySelectorAll('a')].find(el => el.textContent.trim() === 'Lease');
+      const leaseMenu = [...document.querySelectorAll('a')]
+        .find(el => el.textContent.trim() === 'Lease');
       leaseMenu?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     });
-    await new Promise(r => setTimeout(r, 10000));
+    await new Promise(r => setTimeout(r, 2000));
 
-    // Decide Offer vs Renewal
     const isLeaseOffer = contractNumber.includes('LO');
-    const submenuText = isLeaseOffer ? 'Lease Offer' : 'Lease Renewal';
+    const submenuText  = isLeaseOffer ? 'Lease Offer' : 'Lease Renewal';
     console.log(`[STEP] clicking submenu "${submenuText}"`);
     const clicked = await page.evaluate(text => {
-      const link = [...document.querySelectorAll('a')].find(a => a.textContent.trim() === text);
+      const link = [...document.querySelectorAll('a')]
+        .find(a => a.textContent.trim() === text);
       if (link) { link.click(); return true; }
       return false;
     }, submenuText);
-    if (!clicked) {
-      throw new Error(`Could not click submenu: ${submenuText}`);
-    }
+    if (!clicked) throw new Error(`Could not click submenu: ${submenuText}`);
     await new Promise(r => setTimeout(r, 5000));
 
     console.log('[STEP] waiting for search iframe');
@@ -2813,40 +2764,19 @@ app.post('/api/check-contract-status', async (req, res) => {
       { visible: true, timeout: 20000 }
     );
     const frame = await iframeHandle.contentFrame();
-    if (!frame) throw new Error('Could not get contentFrame()');
+    if (!frame) throw new Error('Could not access frameBottom');
 
-    console.log('[STEP] waiting for search input inside iframe (up to 50 s)…');
-    let searchFound = false;
-    try {
-      await frame.waitForSelector('#panel_SimpleSearch_c1', { visible: true, timeout: 50000 });
-      searchFound = true;
-    } catch (cssErr) {
-      console.warn('[WARN] CSS selector not found after 50s:', cssErr.message);
-      try {
-        await frame.waitForXPath('//*[@id="panel_SimpleSearch_c1"]', { visible: true, timeout: 10000 });
-        searchFound = true;
-      } catch {}
-    }
+    console.log('[STEP] waiting for search box');
+    await frame.waitForSelector('#panel_SimpleSearch_c1', { visible: true, timeout: 50000 });
 
-    if (!searchFound) {
-      console.error('[ERROR] Search box not found; skipping status check.');
-      return res.json({
-        success: true,
-        status: null,
-        message: 'Search box not found; cannot extract workflow status at this time.'
-      });
-    }
-
-    console.log('[STEP] entering contract number');
-    await frame.evaluate((cn) => {
+    console.log('[STEP] clearing & typing contract number');
+    await frame.evaluate(() => {
       const inp = document.querySelector('#panel_SimpleSearch_c1');
-      if (inp) {
-        inp.value = cn;
-        inp.focus();
-      }
-    }, contractNumber);
+      if (inp) inp.value = '';
+    });
+    await frame.type('#panel_SimpleSearch_c1', contractNumber, { delay: 50 });
 
-    console.log('[STEP] clicking search button');
+    console.log('[STEP] clicking Search');
     await frame.evaluate(() => document.querySelector('a#panel_buttonSearch_bt')?.click());
     await new Promise(r => setTimeout(r, 5000));
 
@@ -2855,8 +2785,11 @@ app.post('/api/check-contract-status', async (req, res) => {
       ? '//*[@id="gridResults_gv"]/tbody/tr[2]/td[13]'
       : '//*[@id="gridResults_gv"]/tbody/tr[2]/td[12]';
     const statusText = await frame.evaluate(xpath => {
-      const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-      return result.singleNodeValue?.textContent.trim() || null;
+      const r = document.evaluate(
+        xpath, document, null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE, null
+      );
+      return r.singleNodeValue?.textContent.trim() || null;
     }, statusXPath);
 
     console.log(`[RESULT] ${contractNumber} → "${statusText}"`);
@@ -2864,7 +2797,10 @@ app.post('/api/check-contract-status', async (req, res) => {
 
   } catch (err) {
     console.error('[ERROR] Contract status check failed:', err);
-    return res.status(500).json({ message: 'Failed to check contract status', error: err.message });
+    return res.status(500).json({
+      message: 'Failed to check contract status',
+      error: err.message
+    });
   }
 });
 
