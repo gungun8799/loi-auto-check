@@ -2654,6 +2654,32 @@ app.post('/api/check-contract-status', async (req, res) => {
     return res.status(500).json({ message: 'Server misconfiguration: missing credentials' });
   }
 
+  // If you've pointed at a dedicated Puppeteer service, just proxy the request:
+  if (process.env.PUPPETEER_SERVICE_URL) {
+    const serviceUrl = process.env.PUPPETEER_SERVICE_URL.replace(/\/$/, '');
+    console.log(`[STEP] Delegating check-contract-status to ${serviceUrl}`);
+    try {
+      const { data } = await axios.post(
+        `${serviceUrl}/api/check-contract-status`,
+        { contractNumber },
+        { timeout: 120_000 }
+      );
+      return res.status(200).json(data);
+    } catch (err) {
+      console.error('[ERROR] Remote contract-status failed:', err.message);
+      if (err.response && err.response.data) {
+        return res
+          .status(err.response.status || 500)
+          .json(err.response.data);
+      }
+      return res
+        .status(500)
+        .json({ message: 'Failed to check contract status', error: err.message });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Otherwise fall back to your existing in‐process Puppeteer logic:
   // Button selectors
   const continueSel1 = '#root > div > div > div.sc-dymIpo.izSiFn ' +
     '> div.withConditionalBorder.sc-bnXvFD.izlagV ' +
@@ -2679,12 +2705,11 @@ app.post('/api/check-contract-status', async (req, res) => {
             '--disable-dev-shm-usage',
             '--disable-gpu'
           ],
-      // only set executablePath in production if the env var is present
       ...( !isLocal && process.env.PUPPETEER_EXECUTABLE_PATH
         ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
         : {}
       )
-        };
+    };
 
     if (!browserSessions.has(systemType)) {
       console.log('[STEP] launching new Puppeteer session');

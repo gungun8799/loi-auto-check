@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
       google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# ─── Tell Puppeteer where to find it ────────────────────────────────────────
+# ─── Tell Puppeteer where to find Chrome ────────────────────────────────────
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
 # ─── App setup ───────────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ COPY package*.json ./
 RUN npm ci --production
 COPY . .
 
-# ─── Create storage directories ──────────────────────────────────────────────
+# ─── Create runtime directories ───────────────────────────────────────────────
 RUN mkdir -p contracts processed tmp_uploads \
   && chmod -R 755 contracts processed tmp_uploads \
   && chown -R node:node contracts processed tmp_uploads
