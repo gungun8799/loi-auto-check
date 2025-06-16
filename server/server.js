@@ -865,7 +865,8 @@ app.post('/api/scrape-url', async (req, res) => {
         await page.waitForSelector(postLoginSelector, { timeout: 10000 });
 
         // store session for reuse
-        browserSessions.set(systemType, { browser, page });
+        // grab the stored session
+        const { browser, page } = browserSessions.get(systemType);
         console.log(`[✅ Logged in to Simplicity as ${user}]`);
       } catch (err) {
         console.error('[❌ Simplicity login failed]', err.message || err);
