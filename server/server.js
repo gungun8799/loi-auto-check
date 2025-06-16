@@ -2654,32 +2654,6 @@ app.post('/api/check-contract-status', async (req, res) => {
     return res.status(500).json({ message: 'Server misconfiguration: missing credentials' });
   }
 
-  // If you've pointed at a dedicated Puppeteer service, just proxy the request:
-  if (process.env.PUPPETEER_SERVICE_URL) {
-    const serviceUrl = process.env.PUPPETEER_SERVICE_URL.replace(/\/$/, '');
-    console.log(`[STEP] Delegating check-contract-status to ${serviceUrl}`);
-    try {
-      const { data } = await axios.post(
-        `${serviceUrl}/api/check-contract-status`,
-        { contractNumber },
-        { timeout: 120_000 }
-      );
-      return res.status(200).json(data);
-    } catch (err) {
-      console.error('[ERROR] Remote contract-status failed:', err.message);
-      if (err.response && err.response.data) {
-        return res
-          .status(err.response.status || 500)
-          .json(err.response.data);
-      }
-      return res
-        .status(500)
-        .json({ message: 'Failed to check contract status', error: err.message });
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Otherwise fall back to your existing in‐process Puppeteer logic:
   // Button selectors
   const continueSel1 = '#root > div > div > div.sc-dymIpo.izSiFn ' +
     '> div.withConditionalBorder.sc-bnXvFD.izlagV ' +
@@ -2689,6 +2663,22 @@ app.post('/api/check-contract-status', async (req, res) => {
     '> div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(4) > div > button';
 
   try {
+    // ─── DELEGATE TO REMOTE SERVICE IF CONFIGURED ─────────────────────────────
+    if (process.env.PUPPETEER_SERVICE_URL) {
+      console.log('[STEP] delegating status check to remote Puppeteer service]');
+      const { data } = await axios.post(
+        `${process.env.PUPPETEER_SERVICE_URL}/api/check-contract-status`,
+        { contractNumber, username: user, password: pass },
+        { timeout: 120000 }
+      );
+      if (!data.success) {
+        console.error('[ERROR] remote service failed]', data);
+        return res.status(502).json({ success: false, message: 'Remote service failed', ...data });
+      }
+      return res.json({ success: true, status: data.status });
+    }
+
+    // ─── Otherwise, run local Puppeteer logic ─────────────────────────────────
     const systemType = 'simplicity';
     let browser, page;
 
