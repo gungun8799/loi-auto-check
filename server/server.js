@@ -773,7 +773,7 @@ app.post('/api/scrape-url', async (req, res) => {
       const { data } = await axios.post(
         `${process.env.PUPPETEER_SERVICE_URL}/api/scrape-url`,
         req.body,
-        { timeout: 300000 }
+        { timeout: 600000 }
       );
       return res.status(data.success ? 200 : 502).json(data);
     } catch (err) {
@@ -938,7 +938,7 @@ app.post('/api/scrape-url', async (req, res) => {
     await frame.evaluate(() => {
       document.querySelector('a#panel_buttonSearch_bt')?.click();
     });
-    await new Promise(r => setTimeout(r, 15000));
+    await new Promise(r => setTimeout(r, 30000));
 
     console.log('[Simplicity] Clicking view icon...');
     const viewButton = await frame.$('input[src*="view-black-16.png"]');
