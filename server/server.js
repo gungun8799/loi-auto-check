@@ -773,7 +773,7 @@ app.post('/api/scrape-url', async (req, res) => {
       const { data } = await axios.post(
         `${process.env.PUPPETEER_SERVICE_URL}/api/scrape-url`,
         req.body,
-        { timeout: 120000 }
+        { timeout: 300000 }
       );
       return res.status(data.success ? 200 : 502).json(data);
     } catch (err) {
@@ -997,7 +997,7 @@ app.post('/api/scrape-url', async (req, res) => {
       '#panelSecurityDeposit_label',
       '#panelOneTimeCharge_label'
     ];
-    await new Promise(r => setTimeout(r, 10000));
+    await new Promise(r => setTimeout(r, 20000));
     for (const sel of collapsibleIds) {
       try {
         const isCollapsed = await popup.$eval(
