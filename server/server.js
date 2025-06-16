@@ -1007,7 +1007,7 @@ app.post('/api/scrape-url', async (req, res) => {
         if (isCollapsed) {
           await popup.click(sel);
           console.log(`✅ Expanded: ${sel}`);
-          await popup.waitForTimeout(7000);
+          await new Promise(r => setTimeout(r, 7000));
         }
       } catch (e) {
         console.warn(`⚠️ Could not expand ${sel}:`, e.message);
