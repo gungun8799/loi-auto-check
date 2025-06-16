@@ -1019,7 +1019,13 @@ app.post('/api/scrape-url', async (req, res) => {
 
     // …the rest of your Gemini & Firestore logic remains exactly as before…
     // (saving to compare_result, etc.)
-
+    console.log('[Simplicity scrape-url complete]');
+    return res.json({
+      success: true,
+      raw: scrapedText,
+      geminiOutput: geminiText,
+      popupUrl
+    });
   } catch (err) {
     console.error('[Simplicity scrape-url error]', err);
     res
