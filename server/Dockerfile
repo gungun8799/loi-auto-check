@@ -13,12 +13,21 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ─── Tell Puppeteer where to find Chrome ────────────────────────────────────
+# This lets your code use the system Chrome you just installed.
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
 # ─── App setup ───────────────────────────────────────────────────────────────
 WORKDIR /usr/src/app
+
+# Copy package.json & install deps (including Puppeteer)
 COPY package*.json ./
 RUN npm ci --production
+
+# ─── Force Puppeteer to install its bundled Chromium ────────────────────────
+# (Puppeteer won’t download it inside Docker unless you explicitly ask.)
+RUN npx puppeteer install
+
+# ─── Copy application code ───────────────────────────────────────────────────
 COPY . .
 
 # ─── Create runtime directories ───────────────────────────────────────────────
