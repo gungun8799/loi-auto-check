@@ -1016,15 +1016,26 @@ app.post('/api/scrape-url', async (req, res) => {
 
     const scrapedText = await popup.evaluate(() => document.body.innerText);
     console.log('[Simplicity] Scraped content length:', scrapedText.length);
+    console.log('[Simplicity scrape-url complete]');
 
     // …the rest of your Gemini & Firestore logic remains exactly as before…
     // (saving to compare_result, etc.)
-    console.log('[Simplicity scrape-url complete]');
+    // …after expanding all panels…
+
+
+    // ─── Send scrapedText through Gemini ────────────────────────────────
+    console.log('[Simplicity] Sending scraped content to Gemini model...');
+    const promptFilePath = path.join(__dirname, 'prompts', `${promptKey}.txt`);
+    const promptTemplate = fs.readFileSync(promptFilePath, 'utf8');
+    const finalPrompt    = `${promptTemplate}\n\nContent:\n${scrapedText}`;
+    const geminiRes      = await model.generateContent(finalPrompt);
+    const geminiText     = await geminiRes.response.text();
+    console.log('[Simplicity] Gemini output received');
+
     return res.json({
-      success: true,
-      raw: scrapedText,
-      geminiOutput,
-      
+      success:       true,
+      raw:           scrapedText,
+      geminiOutput:  geminiText
     });
   } catch (err) {
     console.error('[Simplicity scrape-url error]', err);
