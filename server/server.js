@@ -2687,6 +2687,7 @@ app.post('/api/check-contract-status', async (req, res) => {
 
     const launchOptions = {
       headless: !isLocal,
+      dumpio: true,
       args: isLocal
         ? ['--start-fullscreen']
         : [
