@@ -114,6 +114,23 @@ app.get('/api/list-files', async (req, res) => {
   }
 });
 
+app.get('/api/chrome-paths', (req, res) => {
+  const candidates = [
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/headless-chromium'
+  ];
+  const found = candidates
+    .filter(p => fs.existsSync(p))
+    .map(p => ({ path: p, version: require('child_process')
+        .execSync(`${p} --version`)
+        .toString()
+        .trim() }));
+  res.json({ found, all: candidates });
+});
+
 
 // DELETE /api/delete-entry?path=<url-encoded-relative-path>
 // DELETE an individual file or empty folder
