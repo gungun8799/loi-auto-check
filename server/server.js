@@ -1023,7 +1023,7 @@ app.post('/api/scrape-url', async (req, res) => {
     return res.json({
       success: true,
       raw: scrapedText,
-      popupUrl
+      
     });
   } catch (err) {
     console.error('[Simplicity scrape-url error]', err);
