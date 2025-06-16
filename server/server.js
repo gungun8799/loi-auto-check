@@ -1023,7 +1023,6 @@ app.post('/api/scrape-url', async (req, res) => {
     return res.json({
       success: true,
       raw: scrapedText,
-      geminiOutput: geminiText,
       popupUrl
     });
   } catch (err) {
