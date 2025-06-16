@@ -2560,10 +2560,14 @@ async function checkIfFileExistsInFirebase(filename) {
       console.log(`[✅ STEP 1: Not found] ${contractNumber} not yet in compare_result. Skipping timestamp check.`);
     }
 
-    // ✅ STEP 3: Check Simplicity contract status
-    console.log(`[STEP 3] 📄 Checking Simplicity status for ${contractNumber}...`);
-    const statusRes = await axios.post('http://localhost:5001/api/check-contract-status', { contractNumber });
-    const contractStatus = statusRes.data?.status || '';
+  // ✅ STEP 3: Check Simplicity contract status (local or remote Puppeteer service)
+  console.log(`[STEP 3] 📄 Checking Simplicity status for ${contractNumber}...`);
+  const serviceUrl = process.env.PUPPETEER_SERVICE_URL || 'http://localhost:5001';
+  const statusRes = await axios.post(
+    `${serviceUrl}/api/check-contract-status`,
+    { contractNumber }
+  );
+  const contractStatus = statusRes.data?.status || '';
 
     console.log(`[STEP 3] 🔍 Contract status = "${contractStatus}"`);
     /*
@@ -2626,27 +2630,37 @@ app.post('/api/check-contract-status', async (req, res) => {
     const continueSel1 = '#root > div > div > div.sc-dymIpo.izSiFn > div.withConditionalBorder.sc-bnXvFD.izlagV > div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(3) > div > button';
     const continueSel2 = '#root > div > div > div.sc-dymIpo.izSiFn > div.withConditionalBorder.sc-bnXvFD.izlagV > div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(4) > div > button';
 
-    // ─── 1) LOGIN OR RELOAD ─────────────────────────────────────────────────────────────
-    if (!browserSessions.has(systemType)) {
-      // Fresh login
-      console.log('[STEP] launching browser/session');
+    if (process.env.PUPPETEER_SERVICE_URL) {
+      console.log('[STEP] delegating login to remote Puppeteer service]');
+      const { data } = await axios.post(
+        `${process.env.PUPPETEER_SERVICE_URL}/api/scrape-login`,
+        { systemType, username, password }
+      );
+      if (!data.success) {
+        return res.status(401).json(data);
+      }
+      console.log('[STEP] remote login succeeded]');
+      return res.json(data);
+    }
     
+    if (!browserSessions.has(systemType)) {
+      // Fresh, local Puppeteer login
+      console.log('[STEP] launching browser/session locally');
       const isProd = process.env.NODE_ENV === 'production';
       const launchOptions = {
         headless: isProd,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          ...(isProd ? ['--disable-dev-shm-usage', '--disable-gpu'] : [])
+          ...(isProd ? ['--disable-dev-shm-usage','--disable-gpu'] : [])
         ],
         ...(isProd && {
-          executablePath:
-            process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
+          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
         })
       };
-    
       browser = await puppeteer.launch(launchOptions);
       page    = await browser.newPage();
+      browserSessions.set(systemType, { browser, page });
 
       console.log('[STEP] going to apptop.aspx');
       await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
