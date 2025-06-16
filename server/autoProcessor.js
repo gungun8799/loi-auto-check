@@ -338,10 +338,6 @@ async function checkIfFileExistsInFirebase(file) {
   }
 }
 
-async function checkIfFileExistsInFirebase(file) {
-  return false;
-}
-
 
 
 export { processOneContract, processContractsInFolder, delayedMove };
