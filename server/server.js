@@ -1153,13 +1153,21 @@ app.post('/api/open-popup-tab', async (req, res) => {
 
 // end of scrape logic
 app.post('/api/scrape-login', async (req, res) => {
-  const { systemType, username, password } = req.body;
+    const { systemType } = req.body;
+    // if client didn’t send creds, fall back to env
+    const username = req.body.username || process.env.SIMPLICITY_USER;
+    const password = req.body.password || process.env.SIMPLICITY_PASS;
 
   // No‐op for “others”
   if (!systemType || systemType === 'others') {
     return res.status(200).json({ success: true, message: 'No login required for Others.' });
   }
-
+    // guard missing
+    if (!username || !password) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Missing Simplicity credentials' });
+    }
   try {
     let browser, page;
   

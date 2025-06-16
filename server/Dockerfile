@@ -1,43 +1,40 @@
-# ─── Dockerfile ─────────────────────────────────────────────────────
-FROM node:18-alpine
+# ─── Base image with Node.js ────────────────────────────────────────────────
+FROM node:18-slim
 
-# install Chromium & libraries for Puppeteer
-RUN apk add --no-cache \
-      chromium \
-      nss \
-      freetype \
-      harfbuzz \
+# ─── Install dependencies for Puppeteer + Chrome Stable ────────────────────
+RUN apt-get update && apt-get install -y \
+      wget \
+      gnupg \
       ca-certificates \
-      ttf-freefont
+    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub \
+        | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" \
+        > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update && apt-get install -y \
+      google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/*
 
+# ─── Let Puppeteer know where the Chrome binary lives ───────────────────────
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+
+# ─── Set working directory ─────────────────────────────────────────────────
 WORKDIR /usr/src/app
 
-# copy package manifest & install prod deps
+# ─── Copy package manifests & install only production deps ─────────────────
 COPY package*.json ./
 RUN npm ci --production
 
-# copy app code
+# ─── Copy the rest of your application code ────────────────────────────────
 COPY . .
 
-# pre-create and chown all dirs Puppeteer or multer will write into
-RUN mkdir -p \
-      contracts \
-      processed \
-      tmp_uploads \
-      uploads \
-      prompts \
-    && chown -R node:node \
-      contracts \
-      processed \
-      tmp_uploads \
-      uploads \
-      prompts
+# ─── Pre-create and secure your runtime directories ────────────────────────
+RUN mkdir -p contracts processed tmp_uploads \
+  && chmod -R 755 contracts processed tmp_uploads \
+  && chown -R node:node contracts processed tmp_uploads
 
+# ─── Drop root privileges ──────────────────────────────────────────────────
 USER node
 
-# point Puppeteer at Alpine's Chromium
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
+# ─── Expose and launch your server ─────────────────────────────────────────
 EXPOSE 5001
 CMD ["node", "server.js"]
-# ─────────────────────────────────────────────────────────────────────

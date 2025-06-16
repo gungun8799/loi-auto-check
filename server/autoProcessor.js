@@ -174,17 +174,12 @@ const contractId = extractedContractNumber.replace(/\//g, '_');
 console.log(`[🔖 Extracted Contract Number] ${extractedContractNumber}`);
 
 // ─── Step 2.2.5: Ensure we’re logged in to Simplicity ───────────────────
-console.log(`[🔐 Logging in to Simplicity as ${process.env.SIMPLICITY_USER}]`);
-try {
-  await axios.post(
-    `${BASE_URL}/api/scrape-login`,
-    {
-      systemType: 'simplicity',
-      username:   process.env.SIMPLICITY_USER,
-      password:   process.env.SIMPLICITY_PASS,
-    },
-    { withCredentials: true }
-  );
+ console.log('[🔐 Logging in to Simplicity]');
+ await axios.post(
+   `${BASE_URL}/api/scrape-login`,
+   { systemType: 'simplicity' },      // no creds needed in the bundle
+   { withCredentials: true }
+ );
   console.log('[✅ Logged in to Simplicity]');
 } catch (err) {
   console.error('[❌ Simplicity login failed]', err.response?.data || err.message);
