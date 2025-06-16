@@ -317,14 +317,27 @@ app.post('/api/process-pdf', async (req, res) => {
   try {
     // ─── Launch Puppeteer ────────────────────────────────────────────────
     try {
+      const isProd = process.env.NODE_ENV === 'production';
       const launchOptions = {
         headless: isProd,
+        dumpio: false,    // don’t pipe Chrome’s own logs
         args: isProd
-          ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-          : [],
-        ...(isProd && { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH })
+          ? [
+              '--no-sandbox',
+              '--disable-setuid-sandbox',
+              '--disable-dev-shm-usage',
+              '--disable-gpu',
+              '--disable-software-rasterizer',
+              '--single-process',
+              '--disable-dbus-for-chrome'
+            ]
+          : ['--start-fullscreen'],
+        ...(isProd && process.env.PUPPETEER_EXECUTABLE_PATH
+          ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
+          : {}
+        )
       };
-    
+
       browser = await puppeteer.launch(launchOptions);
       console.log('[✅ Puppeteer launched]');
     } catch (launchErr) {
@@ -399,7 +412,6 @@ app.post('/api/process-pdf', async (req, res) => {
     }
   }
 });
-
 
 // Firebase Admin Init
 /*
@@ -777,25 +789,35 @@ app.post('/api/scrape-url', async (req, res) => {
     }
 
     // if we don’t yet have a Puppeteer session, log in now
-    if (!browserSessions.has(systemType)) {
-      console.log(`[🔐 Logging in to Simplicity as ${user}]`);
-      try {
-        // launch headless with no-sandbox flags for container compatibility
-        const launchOpts = {
-          headless: isProd,
-          args: isProd
-            ? [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu'
-              ]
-            : [],
-          ...(isProd && { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH })
-        };
-        
-        browser = await puppeteer.launch(launchOpts);
-        console.log('[✅ Puppeteer launched]');
+// if we don’t yet have a Puppeteer session, log in now
+if (!browserSessions.has(systemType)) {
+  console.log(`[🔐 Logging in to Simplicity as ${user}]`);
+  try {
+    // —— NEW LAUNCH LOGIC —— 
+    const isProd = process.env.NODE_ENV === 'production';
+    const launchOpts = {
+      headless:  isProd,                           // prod: headless, local: headed
+      dumpio:    false,
+      args:      isProd
+        ? [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-software-rasterizer',
+            '--single-process',
+            '--disable-dbus-for-chrome'
+          ]
+        : ['--start-fullscreen'],
+      ...(isProd && process.env.PUPPETEER_EXECUTABLE_PATH
+        ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
+        : {}
+      )
+    };
+
+    browser = await puppeteer.launch(launchOpts);
+    const page  = await browser.newPage();
+    console.log('[✅ Puppeteer launched]');
 
         // navigate to Simplicity login
         await page.goto(process.env.SIMPLICITY_LOGIN_URL, { waitUntil: 'networkidle0' });
@@ -1034,18 +1056,23 @@ app.post('/api/open-popup-tab', async (req, res) => {
     
       const isProd = process.env.NODE_ENV === 'production';
       const launchOpts = {
-        headless: isProd,
+        headless:  isProd,                     // production → headless; local → headed
         defaultViewport: null,
-        args: isProd
+        args:      isProd
           ? [
               '--no-sandbox',
               '--disable-setuid-sandbox',
               '--disable-dev-shm-usage',
               '--disable-gpu',
-              '--start-fullscreen'
+              '--disable-software-rasterizer',
+              '--single-process',
+              '--disable-dbus-for-chrome'
             ]
           : ['--start-fullscreen'],
-        ...(isProd && { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH })
+        ...(isProd && process.env.PUPPETEER_EXECUTABLE_PATH
+          ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
+          : {}
+        )
       };
     
       browser = await puppeteer.launch(launchOpts);
@@ -1173,24 +1200,25 @@ app.post('/api/open-popup-tab', async (req, res) => {
 
 // end of scrape logic
 app.post('/api/scrape-login', async (req, res) => {
-    const { systemType } = req.body;
-    // if client didn’t send creds, fall back to env
-    const username = req.body.username || process.env.SIMPLICITY_USER;
-    const password = req.body.password || process.env.SIMPLICITY_PASS;
+  const { systemType } = req.body;
+  // if client didn’t send creds, fall back to env
+  const username = req.body.username || process.env.SIMPLICITY_USER;
+  const password = req.body.password || process.env.SIMPLICITY_PASS;
 
   // No‐op for “others”
   if (!systemType || systemType === 'others') {
     return res.status(200).json({ success: true, message: 'No login required for Others.' });
   }
-    // guard missing
-    if (!username || !password) {
-      return res
-        .status(400)
-        .json({ success: false, message: 'Missing Simplicity credentials' });
-    }
+  // guard missing
+  if (!username || !password) {
+    return res
+      .status(400)
+      .json({ success: false, message: 'Missing Simplicity credentials' });
+  }
+
   try {
     let browser, page;
-  
+
     // 👉 If you have a remote Puppeteer service, delegate the login there
     if (process.env.PUPPETEER_SERVICE_URL) {
       const { data } = await axios.post(
@@ -1200,13 +1228,13 @@ app.post('/api/scrape-login', async (req, res) => {
       // mirror your existing response shape
       return res.status(data.success ? 200 : 401).json(data);
     }
-  
+
     // ─── Otherwise reuse or launch a local Puppeteer session ─────────────────
     if (browserSessions.has(systemType)) {
       ({ browser, page } = browserSessions.get(systemType));
     } else {
       console.log(`[🔑 Launching new Puppeteer session for ${systemType}]`);
-      
+
       const isProd = process.env.NODE_ENV === 'production';
       const launchOptions = {
         headless: isProd,
@@ -1214,18 +1242,25 @@ app.post('/api/scrape-login', async (req, res) => {
           '--no-sandbox',
           '--disable-setuid-sandbox',
           ...(isProd
-            ? ['--disable-dev-shm-usage', '--disable-gpu', '--start-fullscreen']
-            : []
+            ? [
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--single-process',
+                '--disable-dbus-for-chrome'
+              ]
+            : ['--start-fullscreen']
           )
         ],
-        ...(isProd && {
-          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
-        })
+        ...(isProd && process.env.PUPPETEER_EXECUTABLE_PATH
+          ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
+          : {}
+        )
       };
-      
+
       browser = await puppeteer.launch(launchOptions);
       page    = await browser.newPage();
-      
+
       // store for reuse
       browserSessions.set(systemType, { browser, page });
 
@@ -1500,14 +1535,20 @@ app.post('/api/web-validate', async (req, res) => {
           '--no-sandbox',
           '--disable-setuid-sandbox',
           ...(isProd
-            ? ['--disable-dev-shm-usage', '--disable-gpu', '--start-fullscreen']
+            ? [
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--single-process',
+                '--disable-dbus-for-chrome'
+              ]
             : ['--start-fullscreen']
           )
         ],
-        ...(isProd && {
-          executablePath:
-            process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
-        })
+        ...(isProd && process.env.PUPPETEER_EXECUTABLE_PATH
+          ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
+          : {}
+        )
       };
     
       browser = await puppeteer.launch(launchOptions);
@@ -2018,28 +2059,38 @@ app.post('/api/refresh-contract-status', async (req, res) => {
     let browser, page;
 
     // ─── 1) LOGIN / SESSION SETUP ─────────────────────────────
-if (browserSessions.has(systemType)) {
-  ({ browser, page } = browserSessions.get(systemType));
-  console.log('[REFRESH] Reusing existing session');
-} else {
-  console.log('[REFRESH] No session — performing login');
-
-  const isProd = process.env.NODE_ENV === 'production';
-  const launchOptions = {
-    headless: isProd,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      ...(isProd ? ['--disable-dev-shm-usage','--disable-gpu'] : [])
-    ],
-    ...(isProd && {
-      executablePath:
-        process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome'
-    })
-  };
-
-  browser = await puppeteer.launch(launchOptions);
-  page    = await browser.newPage();
+    if (browserSessions.has(systemType)) {
+      ({ browser, page } = browserSessions.get(systemType));
+      console.log('[REFRESH] Reusing existing session');
+    } else {
+      console.log('[REFRESH] No session — performing login');
+    
+      const isProd = process.env.NODE_ENV === 'production';
+      const launchOptions = {
+        headless: isProd,
+        defaultViewport: null,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          ...(isProd
+            ? [
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--single-process',
+                '--disable-dbus-for-chrome'
+              ]
+            : ['--start-fullscreen']
+          )
+        ],
+        ...(isProd && process.env.PUPPETEER_EXECUTABLE_PATH
+          ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
+          : {}
+        )
+      };
+    
+      browser = await puppeteer.launch(launchOptions);
+      page    = await browser.newPage();
 
   // …followed by your existing login steps…
   browserSessions.set(systemType, { browser, page });
@@ -2646,6 +2697,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       message: 'Skipped: invalid filename format'
     });
   }
+  /*
   if (process.env.PUPPETEER_SERVICE_URL) {
     console.log('[STEP] delegating status check to remote Puppeteer service');
     try {
@@ -2662,6 +2714,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       return res.status(502).json({ success: false, message: 'Remote service error', error: err.response?.data || err.message });
     }
   }
+  */
   const user = process.env.SIMPLICITY_USER;
   const pass = process.env.SIMPLICITY_PASS;
   if (!user || !pass) {
@@ -2679,6 +2732,7 @@ app.post('/api/check-contract-status', async (req, res) => {
 
   try {
     // ─── DELEGATE TO REMOTE SERVICE IF CONFIGURED ─────────────────────────────
+    /*
     if (process.env.PUPPETEER_SERVICE_URL) {
       console.log('[STEP] delegating status check to remote Puppeteer service]');
       const { data } = await axios.post(
@@ -2692,6 +2746,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       }
       return res.json({ success: true, status: data.status });
     }
+    */
 
     // ─── Otherwise, run local Puppeteer logic ─────────────────────────────────
     const systemType = 'simplicity';
