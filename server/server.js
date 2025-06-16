@@ -2903,6 +2903,11 @@ app.post('/api/update-workflow-status', async (req, res) => {
   }
 });
 
+// at the bottom of server.js, before `app.listen(...)`
+app.get('/api/health', (req, res) => {
+  res.json({ uptime: process.uptime(), env: process.env.NODE_ENV });
+});
+
 
 
 app.post('/api/contract-classify', async (req, res) => {
