@@ -297,16 +297,43 @@ const fullPayload = {
   webValidationResult: webValidation,  // your web‐validation array
   popupUrl
 };
-await axios.post(`${BASE_URL}/api/save-compare-result`, fullPayload);
-console.log('[✅ Saved compare + validations together]');
+try {
+  const { data } = await axios.post(
+    `${BASE_URL}/api/save-compare-result`,
+    fullPayload,
+    { withCredentials: true }
+  );
+  if (!data.success) {
+    console.error('[❌ Save failed]', data);
+    return false;
+  }
+  console.log('[✅ Saved compare + validations together]');
+  return true;
+} catch (err) {
+  console.error(
+    '[❌ Error during processing]',
+    err.response?.data || err.message || err
+  );
+  // close Puppeteer so the caller can mark this PDF as “failed”
+  try { await browser.close(); } catch {}
+  return false;
+}
+}
 
-    return true
-
+async function checkIfFileExistsInFirebase(file) {
+  try {
+    const { data } = await axios.get(
+      `${BASE_URL}/api/check-file-processed`,
+      { params: { filename: file }, withCredentials: true }
+    );
+    // data.processed is true when fully passed
+    return data.success && data.processed;
   } catch (err) {
-    console.error('[❌ Error during processing]', err.message || err);
-    // If anything in the above chain (extract→compare→validate→meter→web_validate) failed/timed out,
-    // we close and return false so `processContractsInFolder` moves this PDF to “failed.”
-    try { await browser.close(); } catch {}
+    console.error(
+      '[❌ checkIfFileExistsInFirebase error]',
+      err.response?.data || err.message || err
+    );
+    // on error assume “not processed” so we still try
     return false;
   }
 }
