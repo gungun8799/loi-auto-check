@@ -6,8 +6,6 @@ import { BarChartBig, RefreshCcw } from 'lucide-react';
 import { Bar } from 'react-chartjs-2';
 import * as XLSX from 'xlsx';
 
-
-
 import {
   Chart as ChartJS,
   BarElement,
@@ -198,92 +196,48 @@ const [exportTo, setExportTo] = useState('');     // e.g. "2025-06-10"
   const reviewCount = filteredContracts.length - passedCount;
 
   const handleExport = () => {
-    exportBetween(exportFromRaw, exportToRaw);
-    // 1) Log the raw “from” / “to” strings
-    console.log('▶️ Export From (raw):', exportFromRaw);
-    console.log('▶️ Export To   (raw):', exportToRaw);
-  
-    // 2) Parse those into JS Dates.
-    //    • “from” at 00:00:00
-    //    • “to”   at 23:59:59.999
+    // 1) Parse “from” / “to” into Date objects
     let fromDate = null,
-        toDate = null;
-  
+        toDate   = null;
     if (exportFromRaw) {
       fromDate = new Date(exportFromRaw);
-      fromDate.setHours(0, 0, 0, 0);
+      fromDate.setHours(0,0,0,0);
     }
     if (exportToRaw) {
       toDate = new Date(exportToRaw);
-      toDate.setHours(23, 59, 59, 999);
+      toDate.setHours(23,59,59,999);
     }
   
-    console.log('▶️ Parsed fromDate:', fromDate);
-    console.log('▶️ Parsed toDate:  ', toDate);
-  
-    // 3) Build a new array, filtering by timestamp range
-    const inRange = filteredContracts.filter((contract) => {
+    // 2) Filter contracts by that range
+    const inRange = filteredContracts.filter(contract => {
       const ts = contract.timestamp;
-      console.log(`  • [${contract.contract_number}] raw timestamp:`, ts);
-  
       let actualDate = null;
   
-      // 3a) If it's a Firestore Timestamp object, use its .toDate()
+      // Firestore Timestamp?
       if (ts && typeof ts.toDate === 'function') {
         actualDate = ts.toDate();
-        console.log(`    → via .toDate(): ${actualDate.toString()}`);
       }
-      // 3b) If it’s a plain JSON with _seconds/_nanoseconds
+      // plain JSON _seconds?
       else if (ts && ts._seconds != null) {
-        const sec = ts._seconds;
-        const nano = ts._nanoseconds || 0;
-        actualDate = new Date(sec * 1000 + nano / 1e6);
-        console.log(`    → via _seconds/_nanoseconds: ${actualDate.toString()}`);
+        actualDate = new Date(ts._seconds * 1000 + (ts._nanoseconds||0)/1e6);
       }
-      // 3c) Or if it has seconds/nanoseconds without underscores
+      // seconds/nanoseconds variant?
       else if (ts && ts.seconds != null) {
-        const sec = ts.seconds;
-        const nano = ts.nanoseconds || 0;
-        actualDate = new Date(sec * 1000 + nano / 1e6);
-        console.log(`    → via seconds/nanoseconds: ${actualDate.toString()}`);
+        actualDate = new Date(ts.seconds * 1000 + (ts.nanoseconds||0)/1e6);
       }
-      // 3d) Otherwise, try to treat ts as a normal JS date string / Date
+      // fallback
       else {
         actualDate = new Date(ts);
-        console.log(`    → via new Date(ts): ${actualDate.toString()}`);
       }
   
-      // 3e) If invalid, skip it
-      if (!actualDate || isNaN(actualDate.getTime())) {
-        console.warn(
-          `    ❌ [${contract.contract_number}] invalid Date → excluded`
-        );
-        return false;
-      }
-  
-      // 4) If either fromDate or toDate is set, enforce range.
-      if (fromDate && actualDate < fromDate) {
-        console.warn(
-          `    ❌ [${contract.contract_number}] before fromDate → excluded`
-        );
-        return false;
-      }
-      if (toDate && actualDate > toDate) {
-        console.warn(
-          `    ❌ [${contract.contract_number}] after toDate → excluded`
-        );
-        return false;
-      }
-  
-      // If we reach here, it’s in range
+      if (!actualDate || isNaN(actualDate.getTime())) return false;
+      if (fromDate && actualDate < fromDate) return false;
+      if (toDate   && actualDate > toDate)   return false;
       return true;
     });
   
-    console.log('▶️ Contracts in-range count:', inRange.length);
-  
-    // 5) Map those to “flattened” objects for Excel
-    const cleanedContracts = inRange.map((contract) => {
-      // Destructure out big nested fields we don’t need in Excel
+    // 3) Strip out big fields & format timestamp
+    const cleaned = inRange.map(contract => {
       const {
         pdf_extracted,
         web_extracted,
@@ -296,20 +250,20 @@ const [exportTo, setExportTo] = useState('');     // e.g. "2025-06-10"
         ...keep
       } = contract;
   
-      // Convert the timestamp to "DD-MMM-YYYY"
-      const tsString = formatDate(contract.timestamp);
-  
       return {
         ...keep,
-        timestamp: tsString,
+        timestamp: formatDate(contract.timestamp),
       };
     });
   
-    // 6) Finally, create the worksheet & write file
-    const ws = XLSX.utils.json_to_sheet(cleanedContracts);
+    // 4) Generate & download the XLSX
+    const ws = XLSX.utils.json_to_sheet(cleaned);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Contracts');
-    XLSX.writeFile(wb, 'contracts.xlsx');
+    XLSX.writeFile(
+      wb,
+      `contracts_${exportFromRaw || 'start'}_${exportToRaw || 'end'}.xlsx`
+    );
   };
 
   // 1. create exportBetween(fromRaw, toRaw) helper
@@ -916,7 +870,18 @@ const getContractDate = (ts) => {
                 <tr>
                   <td colSpan={user?.role !== 'user' ? 10 : 9}>
                     <div className={styles.detailsSection}>
-                      {/* …details content… */}
+                      <h4>Compare Result</h4>
+                      <pre>{JSON.stringify(contract.compare_result, null, 2)}</pre>
+                      <h4>Validation Result</h4>
+                      <pre>{JSON.stringify(contract.validation_result, null, 2)}</pre>
+                      <h4>Web Validation</h4>
+                      <pre>{JSON.stringify(contract.web_validation_result, null, 2)}</pre>
+                      <h4>Meter Validation</h4>
+                      <pre>{JSON.stringify(contract.meter_validation_result, null, 2)}</pre>
+                      <h4>Popup URL</h4>
+                      <a href={contract.popup_url} target="_blank" rel="noopener noreferrer">
+                        {contract.popup_url}
+                      </a>
                     </div>
                   </td>
                 </tr>
