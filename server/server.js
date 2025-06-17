@@ -15,7 +15,6 @@ import { dirname } from 'path';
 import archiver from 'archiver';  // at the top with your other imports
 import { promisify } from 'util';
 import fsPromises from 'fs/promises';
-import { TextServiceClient } from '@google/generative-ai';
 
 
 
@@ -26,9 +25,7 @@ dotenv.config({
 const PUPPETEER_SERVICE_URL = process.env.PUPPETEER_SERVICE_URL;
 const FOLDER_PATH = path.join(process.cwd(), 'contracts');
 const isProd = process.env.NODE_ENV === 'production';
-const geminiClient = new TextServiceClient({
-  apiKey: process.env.GEMINI_API_KEY
-});
+
 // Support __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -48,6 +45,17 @@ const allowedOrigins = isDev
       .filter(Boolean)
 
 console.log('⚙️  CORS allowed origins:', allowedOrigins)
+async function callGeminiREST(prompt) {
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateText';
+  const body = {
+    prompt: { text: prompt },
+    temperature: 0.2
+  };
+  const res = await axios.post(url, body, {
+    headers: { 'X-Goog-Api-Key': process.env.GEMINI_API_KEY }
+  });
+  return res.data.candidates[0].output;
+}
 
 app.use(cors({
   origin: (origin, cb) => {
@@ -1679,28 +1687,30 @@ if (process.env.PUPPETEER_SERVICE_URL) {
     const finalPrompt = `${promptTemplate}\n\nExtracted Data:\n${JSON.stringify(extractedData, null, 2)}`;
 
    // ─── 2) GEMINI-BASED WEB VALIDATION ─────────────────────────────
-    console.log('[Web Validation] sending to Gemini via API key…');
-    const [generateResponse] = await geminiClient.generateText({
-      model:     'models/gemini-1.5-flash',
-      prompt:    finalPrompt,
-      temperature: 0.2,
-    });
-    const geminiText = generateResponse.candidates[0].output.trim();
-    console.log('[Web Validation] raw Gemini output:', geminiText);
+    // ─── 2) GEMINI-BASED WEB VALIDATION via REST ───────────────────────
+    console.log('[Web Validation] sending to Gemini via REST…');
+    let rawOutput;
+    try {
+      rawOutput = await callGeminiREST(finalPrompt);
+    } catch (e) {
+      console.error('[Web Validation] Gemini REST call failed]', e.response?.data || e.message);
+      return res.status(500).json({ message: 'Gemini API error', error: e.message });
+    }
 
-    // strip any fencing
-    let jsonText = geminiText
-      .replace(/^```json\s*/, '')
+    console.log('[Web Validation] raw output:', rawOutput);
+    // strip ``` fences if any
+    let jsonText = rawOutput
+      .replace(/^```json\s*/i, '')
       .replace(/```$/, '')
       .trim();
 
     let parsedResult;
     try {
       parsedResult = JSON.parse(jsonText);
-      if (!Array.isArray(parsedResult)) throw new Error('Expected an array');
+      if (!Array.isArray(parsedResult)) throw new Error('Expected array');
     } catch (err) {
-      console.error('[Web Validation] parse error', err);
-      return res.status(500).json({ message: 'Failed to parse Gemini output', raw: geminiText });
+      console.error('[Web Validation] parse error]', err);
+      return res.status(500).json({ message: 'Failed to parse Gemini output', raw: rawOutput });
     }
     console.log('[Web Validation] parsed result:', parsedResult);
 
