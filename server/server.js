@@ -2664,18 +2664,21 @@ import axios from 'axios';  // To call the /api/check-file-exists endpoint
 
 app.post('/api/auto-process-pdf-folder', async (req, res) => {
   const FOLDER_PATH = path.join(process.cwd(), 'contracts');
-  const files = fs.readdirSync(FOLDER_PATH).filter(f => f.toLowerCase().endsWith('.pdf'));
+  const files = fs
+    .readdirSync(FOLDER_PATH)
+    .filter(f => f.toLowerCase().endsWith('.pdf'));
   const promptKey = req.body.promptKey || 'LOI_permanent_fixed_fields';
 
-  // ✅ Use only the date for folder name
+  // ─── Prepare your date-based output folders ─────────────────────────────
   const now = new Date();
-  const dateOnly = now.toISOString().split('T')[0]; // e.g., '2025-05-10'
+  const dateOnly = now.toISOString().split('T')[0];
   const OUTPUT_BASE = path.join(process.cwd(), 'processed', dateOnly);
+  const PASSED_FOLDER  = path.join(OUTPUT_BASE, 'verification_passed');
+  const FAILED_FOLDER  = path.join(OUTPUT_BASE, 'verification_failed');
   const SKIPPED_FOLDER = path.join(OUTPUT_BASE, 'skipped');
 
-  if (!fs.existsSync(SKIPPED_FOLDER)) {
-    fs.mkdirSync(SKIPPED_FOLDER, { recursive: true });
-    console.log(`[📁 Folder Created] ${SKIPPED_FOLDER}`);
+  for (const dir of [PASSED_FOLDER, FAILED_FOLDER, SKIPPED_FOLDER]) {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   }
 
   if (!files.length) {
@@ -2685,33 +2688,47 @@ app.post('/api/auto-process-pdf-folder', async (req, res) => {
   let processedCount = 0;
 
   for (const file of files) {
-    const fileNameWithoutExtension = path.basename(file, '.pdf');
+    const baseName = file.replace(/\.pdf$/i, '');
     const validPattern = /^\d+_(?:LO|LR)\d+_\d+$/;
-    if (!validPattern.test(fileNameWithoutExtension)) {
-      console.log(`[⏭️  Skipping invalid filename] ${fileNameWithoutExtension}`);
 
-      
-
-      // Don’t process this one—go to the next file
+    // 0) Skip invalid names
+    if (!validPattern.test(baseName)) {
+      console.log(`[⏭️ Skip Invalid Filename] ${file}`);
       continue;
     }
 
-    const alreadyProcessed = await checkIfFileExistsInFirebase(fileNameWithoutExtension);
+    // 1) Check Firebase
+    let alreadyProcessed = false;
+    try {
+      alreadyProcessed = await checkIfFileExistsInFirebase(baseName);
+    } catch (err) {
+      console.error(`[❌ ERROR] ${baseName}: checkIfFileExistsInFirebase failed:`, err.message);
+      // treat as not processed
+      alreadyProcessed = false;
+    }
 
     if (alreadyProcessed) {
-      console.log(`[❌ Skipping] ${fileNameWithoutExtension} has already been processed.`);
+      console.log(`[⏭️ Skip Confirmed] ${file} – already processed.`);
+      await delayedMove(file, SKIPPED_FOLDER);
       continue;
     }
 
-    console.log(`[📄 Processing] ${fileNameWithoutExtension}`);
-    await processOneContract(file, promptKey);
-    processedCount++;
+    // 2) Process it
+    console.log(`[📄 Processing] ${file}`);
+    const success = await processOneContract(file, promptKey);
+    const dest = success ? PASSED_FOLDER : FAILED_FOLDER;
+    await delayedMove(file, dest);
 
-    console.log('[⏳] Waiting for 90 seconds before processing the next file...');
-    await new Promise(resolve => setTimeout(resolve, 90000));
+    processedCount++;
+    console.log('[⏳] Waiting 90s before next file…');
+    await new Promise(r => setTimeout(r, 90_000));
   }
 
-  return res.json({ success: true, processedCount, message: 'Processing completed.' });
+  return res.json({
+    success: true,
+    processedCount,
+    message: `Done — ${processedCount} new file${processedCount !== 1 ? 's' : ''} processed.`
+  });
 });
 
 // Function to check if the file exists in the Firebase 'compare_result' collection
