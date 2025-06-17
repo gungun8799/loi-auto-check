@@ -46,8 +46,8 @@ const allowedOrigins = isDev
 
 console.log('⚙️  CORS allowed origins:', allowedOrigins)
 async function callGeminiREST(prompt) {
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateText';
-  const body = {
+  const url = 'https://generativelanguage.googleapis.com/v1beta2/models/gemini-1.5-flash:generateText';
+    const body = {
     prompt: { text: prompt },
     temperature: 0.2
   };
