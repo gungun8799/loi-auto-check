@@ -22,10 +22,10 @@ import dotenv from 'dotenv';
 dotenv.config({
   path: `.env.${process.env.NODE_ENV || 'development'}`
 });
+
 const PUPPETEER_SERVICE_URL = process.env.PUPPETEER_SERVICE_URL;
 const FOLDER_PATH = path.join(process.cwd(), 'contracts');
 const isProd = process.env.NODE_ENV === 'production';
-
 // Support __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -107,6 +107,7 @@ app.use(
   '/prompts',
   express.static(path.join(__dirname, 'prompts'))
 );
+
 
 // List the files in a folder
 app.get('/api/list-files', async (req, res) => {
@@ -2748,10 +2749,11 @@ async function checkIfFileExistsInFirebase(filename) {
       // ✅ STEP 2: Compare modified timestamp
       console.log(`[STEP 2] 🕒 Comparing modified time for ${contractNumber}...`);
       const fileModifiedTime = fs.statSync(filePath).mtime;
-
-      const timestampRes = await axios.get(`/api/check-file-timestamp`, {
-        params: { filename: contractNumber },
-      });
+      const BASE_URL = process.env.API_URL || `http://localhost:${PORT}`;
+      const timestampRes = await axios.get(
+        `${BASE_URL}/api/check-file-timestamp`,
+        { params: { filename: contractNumber } }
+      );
 
       const { exists, updatedAt } = timestampRes.data;
 
