@@ -867,26 +867,105 @@ const getContractDate = (ts) => {
                 )}
               </tr>
               {expandedId === rowId && (
-                <tr>
-                  <td colSpan={user?.role !== 'user' ? 10 : 9}>
-                    <div className={styles.detailsSection}>
-                      <h4>Compare Result</h4>
-                      <pre>{JSON.stringify(contract.compare_result, null, 2)}</pre>
-                      <h4>Validation Result</h4>
-                      <pre>{JSON.stringify(contract.validation_result, null, 2)}</pre>
-                      <h4>Web Validation</h4>
-                      <pre>{JSON.stringify(contract.web_validation_result, null, 2)}</pre>
-                      <h4>Meter Validation</h4>
-                      <pre>{JSON.stringify(contract.meter_validation_result, null, 2)}</pre>
-                      <h4>Popup URL</h4>
-                      <a href={contract.popup_url} target="_blank" rel="noopener noreferrer">
-                        {contract.popup_url}
-                      </a>
+            <tr>
+              <td colSpan={9}>
+                <div className={styles.detailsSection}>
+                  <h4>🔍 Compare Result</h4>
+                  <table className={styles.detailsTable}>
+                    <thead>
+                      <tr>
+                        <th>Field</th>
+                        <th>PDF</th>
+                        <th>Web</th>
+                        <th>Match</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(contract.compare_result || []).map((row, i) => (
+                        <tr key={i}>
+                          <td>{row.field}</td>
+                          <td>{row.pdf}</td>
+                          <td>{row.web}</td>
+                          <td>{row.match ? '✅' : '❌'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <h4>🧠 PDF Validation Result</h4>
+                  <table className={styles.detailsTable}>
+                    <thead>
+                      <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                        <th>Valid</th>
+                        <th>Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(contract.validation_result || []).map((row, i) => (
+                        <tr key={i}>
+                          <td>{row.field}</td>
+                          <td>{row.value}</td>
+                          <td>{row.valid ? '✅' : '❌'}</td>
+                          <td>{row.reason || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <h4>🌐 Simplicity Validation Result</h4>
+                  <table className={styles.detailsTable}>
+                    <thead>
+                      <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                        <th>Valid</th>
+                        <th>Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(contract.web_validation_result || []).map((row, i) => (
+                        <tr key={i}>
+                          <td>{row.field}</td>
+                          <td>{row.value}</td>
+                          <td>{row.valid ? '✅' : '❌'}</td>
+                          <td>{row.reason || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {contract.meter_validation_result && contract.meter_validation_result.length > 0 && (
+                    <div style={{ marginTop: '2rem' }}>
+                      <h4>🌡 Meter Validation Result</h4>
+                      <table className={styles.detailsTable}>
+                        <thead>
+                          <tr>
+                            <th>Field</th>
+                            <th>Value</th>
+                            <th>Valid</th>
+                            <th>Reason</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {contract.meter_validation_result.map((row, i) => (
+                            <tr key={i}>
+                              <td>{row.field}</td>
+                              <td>{row.value ?? '—'}</td>
+                              <td>{row.valid ? '✅' : '❌'}</td>
+                              <td>{row.reason || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  </td>
-                </tr>
-              )}
-            </React.Fragment>
+                  )}
+                </div>
+              </td>
+            </tr>
+          )}
+        </React.Fragment>
           );
         })}
 
