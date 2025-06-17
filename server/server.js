@@ -2687,19 +2687,8 @@ app.post('/api/auto-process-pdf-folder', async (req, res) => {
   }
 
   let processedCount = 0;
-  
-  const fsPromises = require('fs').promises;
-  async function delayedMove(filename, destinationFolder) {
-    const src = path.join(FOLDER_PATH, filename);
-    const dest = path.join(destinationFolder, filename);
-    await new Promise(r => setTimeout(r, 3000));
-    try {
-      await fsPromises.rename(src, dest);
-    } catch {
-      await fsPromises.copyFile(src, dest);
-      await fsPromises.unlink(src);
-    }
-  }
+
+ 
 
   for (const file of files) {
     const baseName = file.replace(/\.pdf$/i, '');
@@ -2723,7 +2712,6 @@ app.post('/api/auto-process-pdf-folder', async (req, res) => {
 
     if (alreadyProcessed) {
       console.log(`[⏭️ Skip Confirmed] ${file} – already processed.`);
-      await delayedMove(file, SKIPPED_FOLDER);
       continue;
     }
 
@@ -2731,7 +2719,6 @@ app.post('/api/auto-process-pdf-folder', async (req, res) => {
     console.log(`[📄 Processing] ${file}`);
     const success = await processOneContract(file, promptKey);
     const dest = success ? PASSED_FOLDER : FAILED_FOLDER;
-    await delayedMove(file, dest);
 
     processedCount++;
     console.log('[⏳] Waiting 90s before next file…');
