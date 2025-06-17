@@ -1311,7 +1311,7 @@ await withRetries(async () => {
   await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 20000 });
   await Promise.all([
     page.click('#lblToLoginPage'),
-    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }),
+    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 90000 }),
   ]);
 });
 
@@ -1327,7 +1327,7 @@ await withRetries(async () => {
   await page.waitForSelector(continueSel1, { visible: true, timeout: 20000 });
   await Promise.all([
     page.click(continueSel1),
-    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }),
+    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 90000 }),
   ]);
 });
 
@@ -1343,7 +1343,7 @@ await withRetries(async () => {
   await page.waitForSelector(continueSel2, { visible: true, timeout: 20000 });
   await Promise.all([
     page.click(continueSel2),
-    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {}),
+    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 90000 }).catch(() => {}),
   ]);
 });
 
