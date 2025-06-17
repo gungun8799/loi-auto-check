@@ -1516,6 +1516,29 @@ app.post('/api/store-compare-result', async (req, res) => {
 
 //Web validation
 app.post('/api/web-validate', async (req, res) => {
+  // ─── DELEGATE TO REMOTE PUPPETEER SERVICE IF CONFIGURED ───────────────
+if (process.env.PUPPETEER_SERVICE_URL) {
+  console.log('[STEP] delegating web-validate to remote Puppeteer service]');
+  try {
+    const { data } = await axios.post(
+      `${process.env.PUPPETEER_SERVICE_URL}/api/web-validate`,
+      req.body,
+      { timeout: 600000 }
+    );
+    return res.status(data.success ? 200 : 502).json(data);
+  } catch (err) {
+    console.error(
+      '[ERROR] remote web-validate failed:',
+      err.response?.status,
+      err.response?.data || err.message
+    );
+    return res.status(502).json({
+      message: 'Remote web-validate service error',
+      error: err.response?.data || err.message
+    });
+  }
+}
+
   const { contractNumber, extractedData, promptKey = 'default' } = req.body;
   if (!contractNumber || !extractedData || typeof extractedData !== 'object') {
     console.error('[Web Validation] Missing or invalid input:', req.body);
@@ -2059,6 +2082,31 @@ app.post('/api/refresh-contract-status', async (req, res) => {
   if (!contractNumber) {
     return res.status(400).json({ message: 'Missing contractNumber' });
   }
+    // ─── DELEGATE TO REMOTE PUPPETEER SERVICE IF CONFIGURED ────────────
+    if (process.env.PUPPETEER_SERVICE_URL) {
+      console.log('[STEP] delegating refresh-contract-status to remote Puppeteer service');
+      try {
+        const { data } = await axios.post(
+          `${process.env.PUPPETEER_SERVICE_URL}/api/refresh-contract-status`,
+          { contractNumber,
+            username: process.env.SIMPLICITY_USER,
+            password: process.env.SIMPLICITY_PASS
+          },
+          { timeout: 120000 }
+        );
+        return res.status(data.success ? 200 : 502).json(data);
+      } catch (err) {
+        console.error(
+          '[ERROR] remote refresh-contract-status failed:',
+          err.response?.status,
+          err.response?.data || err.message
+        );
+        return res.status(502).json({
+          message: 'Remote refresh-contract-status service error',
+          error: err.response?.data || err.message
+        });
+      }
+    }
 
   try {
     const systemType = 'simplicity';
