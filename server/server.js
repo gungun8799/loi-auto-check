@@ -1044,10 +1044,37 @@ app.post('/api/scrape-url', async (req, res) => {
     const geminiText     = await geminiRes.response.text();
     console.log('[Simplicity] Gemini output received');
 
+    // ─── Extract leaseType & tenantType ────────────────────────────────
+    let leaseType = '';
+    let tenantType = '';
+    try {
+      const ltMatch = geminiText.match(/"Lease Type"\s*:\s*"([^"]+)"/);
+      if (ltMatch) leaseType = ltMatch[1];
+      const ttMatch = geminiText.match(/"Tenant Type"\s*:\s*"([^"]+)"/);
+      if (ttMatch) tenantType = ttMatch[1];
+      console.log('[📄 Scrape Lease Type]', leaseType, '[Tenant Type]', tenantType);
+    } catch (e) {
+      console.warn('[⚠️ Could not extract lease/tenant types]', e);
+    }
+
+    // ─── Persist to Firestore ───────────────────────────────────────────
+    const docId = contractNumber.replace(/\//g, '_');
+    await db.collection('compare_result').doc(docId).set({
+      raw:           scrapedText,
+      gemini_output: geminiText,
+      lease_type:    leaseType,
+      tenant_type:   tenantType,
+      updated_at:    new Date()
+    }, { merge: true });
+    console.log('[🔥 compare_result updated with lease_type & tenant_type]');
+
+    // ─── Final response ─────────────────────────────────────────────────
     return res.json({
       success:       true,
       raw:           scrapedText,
-      geminiOutput:  geminiText
+      geminiOutput:  geminiText,
+      leaseType,
+      tenantType
     });
   } catch (err) {
     console.error('[Simplicity scrape-url error]', err);
