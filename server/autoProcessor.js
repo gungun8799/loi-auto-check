@@ -40,7 +40,9 @@ for (const folder of [PASSED_FOLDER, FAILED_FOLDER, SKIPPED_FOLDER]) {
    */
 /*******  99d33ffb-ad84-4ce2-b05f-eda43bb739a2  *******/ 
 async function processContractsInFolder() {
-  const files = fs.readdirSync(FOLDER_PATH).filter(f => f.toLowerCase().endsWith('.pdf'));
+  const files = fs
+    .readdirSync(FOLDER_PATH)
+    .filter(f => f.toLowerCase().endsWith('.pdf'));
 
   for (const file of files) {
     // ── 0) If the base name (without “.pdf”) does NOT match digits_(LO|LR)digits_digits, skip immediately ──
@@ -56,20 +58,28 @@ async function processContractsInFolder() {
     try {
       alreadyProcessed = await checkIfFileExistsInFirebase(baseName);
     } catch (err) {
-      console.error(`[❌ ERROR] ${baseName}: checkIfFileExistsInFirebase failed:`, err.message);
-      // Fall through and process anyway
+      console.error(
+        `[❌ ERROR] ${baseName}: checkIfFileExistsInFirebase failed:`,
+        err.message
+      );
+      // If the check itself fails, treat as not processed so we still attempt it
       alreadyProcessed = false;
     }
 
     if (alreadyProcessed) {
-      console.log(`[⏭️ Skip Confirmed] ${file} – already processed and up to date.`);
+      console.log(
+        `[⏭️ Skip Confirmed] ${file} – already processed and up to date.`
+      );
       const filePath = path.join(FOLDER_PATH, file);
       if (fs.existsSync(filePath)) {
         console.log(`[🧪 Moving skipped file] Calling delayedMove()`);
         await delayedMove(file, SKIPPED_FOLDER);
       } else {
-        console.warn(`[⚠️ Skipped file not found] ${file} already missing from contracts folder.`);
+        console.warn(
+          `[⚠️ Skipped file not found] ${file} already missing from contracts folder.`
+        );
       }
+      // ── bail out here ─────────────────────────────────────────────
       continue;
     }
 
@@ -80,7 +90,9 @@ async function processContractsInFolder() {
     const destFolder = success ? PASSED_FOLDER : FAILED_FOLDER;
     await delayedMove(file, destFolder);
 
-    console.log('[⏳] Waiting for 90 seconds before processing the next file...');
+    console.log(
+      '[⏳] Waiting for 90 seconds before processing the next file...'
+    );
     await new Promise(resolve => setTimeout(resolve, 90000));
   }
 
