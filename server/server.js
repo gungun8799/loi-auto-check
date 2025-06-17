@@ -15,6 +15,8 @@ import { dirname } from 'path';
 import archiver from 'archiver';  // at the top with your other imports
 import { promisify } from 'util';
 import fsPromises from 'fs/promises';
+import { TextServiceClient } from '@google/generative-ai';
+
 
 
 import dotenv from 'dotenv';
@@ -24,7 +26,9 @@ dotenv.config({
 const PUPPETEER_SERVICE_URL = process.env.PUPPETEER_SERVICE_URL;
 const FOLDER_PATH = path.join(process.cwd(), 'contracts');
 const isProd = process.env.NODE_ENV === 'production';
-
+const geminiClient = new TextServiceClient({
+  apiKey: process.env.GEMINI_API_KEY
+});
 // Support __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1674,19 +1678,29 @@ if (process.env.PUPPETEER_SERVICE_URL) {
     const promptTemplate = fs.readFileSync(promptFilePath, 'utf8');
     const finalPrompt = `${promptTemplate}\n\nExtracted Data:\n${JSON.stringify(extractedData, null, 2)}`;
 
-    console.log('[Web Validation] sending to Gemini');
-    const gemRes = await model.generateContent(finalPrompt);
-    let gemText = (await gemRes.response.text()).trim();
-    if (gemText.startsWith('```json')) gemText = gemText.slice(7);
-    if (gemText.endsWith('```'))      gemText = gemText.slice(0, -3);
+   // ─── 2) GEMINI-BASED WEB VALIDATION ─────────────────────────────
+    console.log('[Web Validation] sending to Gemini via API key…');
+    const [generateResponse] = await geminiClient.generateText({
+      model:     'models/gemini-1.5-flash',
+      prompt:    finalPrompt,
+      temperature: 0.2,
+    });
+    const geminiText = generateResponse.candidates[0].output.trim();
+    console.log('[Web Validation] raw Gemini output:', geminiText);
+
+    // strip any fencing
+    let jsonText = geminiText
+      .replace(/^```json\s*/, '')
+      .replace(/```$/, '')
+      .trim();
 
     let parsedResult;
     try {
-      parsedResult = JSON.parse(gemText);
+      parsedResult = JSON.parse(jsonText);
       if (!Array.isArray(parsedResult)) throw new Error('Expected an array');
     } catch (err) {
       console.error('[Web Validation] parse error', err);
-      return res.status(500).json({ message: 'Failed to parse Gemini output', raw: gemText });
+      return res.status(500).json({ message: 'Failed to parse Gemini output', raw: geminiText });
     }
     console.log('[Web Validation] parsed result:', parsedResult);
 
