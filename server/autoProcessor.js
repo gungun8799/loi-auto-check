@@ -38,7 +38,8 @@ for (const folder of [PASSED_FOLDER, FAILED_FOLDER, SKIPPED_FOLDER]) {
    * Waits 90 seconds between processing each file.
    * @returns {Promise<void>}
    */
-/*******  99d33ffb-ad84-4ce2-b05f-eda43bb739a2  *******/async function processContractsInFolder() {
+/*******  99d33ffb-ad84-4ce2-b05f-eda43bb739a2  *******/ 
+async function processContractsInFolder() {
   const files = fs.readdirSync(FOLDER_PATH).filter(f => f.toLowerCase().endsWith('.pdf'));
 
   for (const file of files) {
@@ -47,14 +48,21 @@ for (const folder of [PASSED_FOLDER, FAILED_FOLDER, SKIPPED_FOLDER]) {
     const validPattern = /^\d+_(?:LO|LR)\d+_\d+$/;
     if (!validPattern.test(baseName)) {
       console.log(`[⏭️ Skip Invalid Filename] ${file} does not match expected pattern.`);
-      // Optionally, move it to SKIPPED_FOLDER or just log and continue:
-      // await delayedMove(file, SKIPPED_FOLDER);
       continue;
+    }
+
+    // ── 1) Check Firebase to see if it's already processed ─────────────────────
+    let alreadyProcessed;
+    try {
+      alreadyProcessed = await checkIfFileExistsInFirebase(baseName);
+    } catch (err) {
+      console.error(`[❌ ERROR] ${baseName}: checkIfFileExistsInFirebase failed:`, err.message);
+      // Fall through and process anyway
+      alreadyProcessed = false;
     }
 
     if (alreadyProcessed) {
       console.log(`[⏭️ Skip Confirmed] ${file} – already processed and up to date.`);
-    
       const filePath = path.join(FOLDER_PATH, file);
       if (fs.existsSync(filePath)) {
         console.log(`[🧪 Moving skipped file] Calling delayedMove()`);
@@ -62,10 +70,10 @@ for (const folder of [PASSED_FOLDER, FAILED_FOLDER, SKIPPED_FOLDER]) {
       } else {
         console.warn(`[⚠️ Skipped file not found] ${file} already missing from contracts folder.`);
       }
-    
       continue;
     }
 
+    // ── 2) Process new file ───────────────────────────────────────────────────
     console.log(`[📄 Processing] ${file}`);
     const success = await processOneContract(file);
 
