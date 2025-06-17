@@ -2749,7 +2749,7 @@ async function checkIfFileExistsInFirebase(filename) {
       console.log(`[STEP 2] 🕒 Comparing modified time for ${contractNumber}...`);
       const fileModifiedTime = fs.statSync(filePath).mtime;
 
-      const timestampRes = await axios.get('http://localhost:5001/api/check-file-timestamp', {
+      const timestampRes = await axios.get(`${BASE_URL}/api/check-file-timestamp`, {
         params: { filename: contractNumber },
       });
 
