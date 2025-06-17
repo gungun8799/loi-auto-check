@@ -2879,7 +2879,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
 
       console.log('[STEP] clicking “go to login”');
-      await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 20000 });
+      await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 60000 });
       await Promise.all([
         page.click('#lblToLoginPage'),
         page.waitForNavigation({ waitUntil: 'networkidle2' })
@@ -2889,22 +2889,22 @@ app.post('/api/check-contract-status', async (req, res) => {
       await new Promise(r => setTimeout(r, 5000));
 
       console.log('[STEP] typing username');
-      await page.waitForSelector('input#username', { visible: true, timeout: 20000 });
+      await page.waitForSelector('input#username', { visible: true, timeout: 60000 });
       await page.type('input#username', user.toString(), { delay: 50 });
 
       console.log('[STEP] clicking Continue #1');
-      await page.waitForSelector(continueSel1, { visible: true, timeout: 20000 });
+      await page.waitForSelector(continueSel1, { visible: true, timeout: 60000 });
       await page.click(continueSel1);
 
       console.log('[STEP] waiting 5s for password form');
       await new Promise(r => setTimeout(r, 5000));
 
       console.log('[STEP] typing password');
-      await page.waitForSelector('input#password', { visible: true, timeout: 20000 });
+      await page.waitForSelector('input#password', { visible: true, timeout: 60000 });
       await page.type('input#password', pass.toString(), { delay: 50 });
 
       console.log('[STEP] clicking Continue #2');
-      await page.waitForSelector(continueSel2, { visible: true, timeout: 20000 });
+      await page.waitForSelector(continueSel2, { visible: true, timeout: 60000 });
       await Promise.all([
         page.click(continueSel2),
         page.waitForNavigation({ waitUntil: 'networkidle2' })
