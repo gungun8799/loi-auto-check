@@ -2687,6 +2687,19 @@ app.post('/api/auto-process-pdf-folder', async (req, res) => {
   }
 
   let processedCount = 0;
+  
+  const fsPromises = require('fs').promises;
+  async function delayedMove(filename, destinationFolder) {
+    const src = path.join(FOLDER_PATH, filename);
+    const dest = path.join(destinationFolder, filename);
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      await fsPromises.rename(src, dest);
+    } catch {
+      await fsPromises.copyFile(src, dest);
+      await fsPromises.unlink(src);
+    }
+  }
 
   for (const file of files) {
     const baseName = file.replace(/\.pdf$/i, '');
