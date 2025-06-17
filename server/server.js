@@ -1677,42 +1677,32 @@ if (process.env.PUPPETEER_SERVICE_URL) {
       browserSessions.set(systemType, { browser, page });
     }
 
-    // ─── 2) GEMINI-BASED WEB VALIDATION ─────────────────────────────
-    const promptFilePath = path.join(__dirname, 'prompts', 'LOI_Sim_validation.txt');
-    if (!fs.existsSync(promptFilePath)) {
-      console.error('[VALIDATION] prompt file missing');
-      return res.status(400).json({ message: 'Validation prompt file not found.' });
-    }
-    const promptTemplate = fs.readFileSync(promptFilePath, 'utf8');
-    const finalPrompt = `${promptTemplate}\n\nExtracted Data:\n${JSON.stringify(extractedData, null, 2)}`;
+      // ─── 2) GEMINI-BASED WEB VALIDATION ─────────────────────────────
+  const promptFilePath = path.join(__dirname, 'prompts', 'LOI_Sim_validation.txt');
+  if (!fs.existsSync(promptFilePath)) {
+    console.error('[VALIDATION] prompt file missing');
+    return res.status(400).json({ message: 'Validation prompt file not found.' });
+  }
+  const promptTemplate = fs.readFileSync(promptFilePath, 'utf8');
+  const finalPrompt = `${promptTemplate}\n\nExtracted Data:\n${JSON.stringify(extractedData, null, 2)}`;
 
-   // ─── 2) GEMINI-BASED WEB VALIDATION ─────────────────────────────
-    // ─── 2) GEMINI-BASED WEB VALIDATION via REST ───────────────────────
-    console.log('[Web Validation] sending to Gemini via REST…');
-    let rawOutput;
-    try {
-      rawOutput = await callGeminiREST(finalPrompt);
-    } catch (e) {
-      console.error('[Web Validation] Gemini REST call failed]', e.response?.data || e.message);
-      return res.status(500).json({ message: 'Gemini API error', error: e.message });
-    }
+  console.log('[Web Validation] sending to Gemini');
+  // ==== here is the swap: use model.generateContent exactly like scrape-url ====
+  const gemRes = await model.generateContent(finalPrompt);
+  let gemText = await gemRes.response.text();
+  gemText = gemText.trim().replace(/^```json\s*/i, '').replace(/```$/, '');
 
-    console.log('[Web Validation] raw output:', rawOutput);
-    // strip ``` fences if any
-    let jsonText = rawOutput
-      .replace(/^```json\s*/i, '')
-      .replace(/```$/, '')
-      .trim();
-
-    let parsedResult;
-    try {
-      parsedResult = JSON.parse(jsonText);
-      if (!Array.isArray(parsedResult)) throw new Error('Expected array');
-    } catch (err) {
-      console.error('[Web Validation] parse error]', err);
-      return res.status(500).json({ message: 'Failed to parse Gemini output', raw: rawOutput });
+  let parsedResult;
+  try {
+    parsedResult = JSON.parse(gemText);
+    if (!Array.isArray(parsedResult)) {
+      throw new Error('Expected an array from Gemini');
     }
-    console.log('[Web Validation] parsed result:', parsedResult);
+  } catch (err) {
+    console.error('[Web Validation] parse error', err);
+    return res.status(500).json({ message: 'Failed to parse Gemini output', raw: gemText });
+  }
+  console.log('[Web Validation] parsed result:', parsedResult);
 
     // ─── extract workflow status from parsedResult ────────────────
     const wfItem = parsedResult.find(
