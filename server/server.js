@@ -1277,35 +1277,63 @@ app.post('/api/scrape-login', async (req, res) => {
         { waitUntil: 'networkidle2' }
       );
 
-      // 4) Click “Click to go to the login page” + wait for it to load
-      await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 20000 });
-      await Promise.all([
-        page.click('#lblToLoginPage'),
-        page.waitForNavigation({ waitUntil: 'networkidle2' })
-      ]);
+      // add this helper at the top of your file:
+async function withRetries(fn, attempts = 5, delayMs = 2000) {
+  let lastErr;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      console.warn(`Attempt ${i}/${attempts} failed: ${err.message}`);
+      if (i < attempts) await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
+}
 
-      // 5) Enter username and Continue
-      await page.waitForSelector('input#username', { visible: true, timeout: 20000 });
-      await page.type('input#username', username, { delay: 50 });
+// …later, in your /api/scrape-login endpoint, replace the original block with:
 
-      const continueSel1 =
-        '#root > div > div > div.sc-dymIpo.izSiFn > div.withConditionalBorder.sc-bnXvFD.izlagV ' +
-        '> div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(3) > div > button';
-      await page.waitForSelector(continueSel1, { visible: true, timeout: 20000 });
-      await page.click(continueSel1);
+// 4) Click “Click to go to the login page” + wait for it to load
+await withRetries(async () => {
+  await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 20000 });
+  await Promise.all([
+    page.click('#lblToLoginPage'),
+    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }),
+  ]);
+});
 
-      // 6) Enter password and Continue
-      await page.waitForSelector('input#password', { visible: true, timeout: 20000 });
-      await page.type('input#password', password, { delay: 50 });
+// 5) Enter username and Continue
+await withRetries(async () => {
+  await page.waitForSelector('input#username', { visible: true, timeout: 20000 });
+  await page.type('input#username', username, { delay: 50 });
 
-      const continueSel2 =
-        '#root > div > div > div.sc-dymIpo.izSiFn > div.withConditionalBorder.sc-bnXvFD.izlagV ' +
-        '> div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(4) > div > button';
-      await page.waitForSelector(continueSel2, { visible: true, timeout: 20000 });
-      await Promise.all([
-        page.click(continueSel2),
-        page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {})
-      ]);
+  const continueSel1 =
+    '#root > div > div > div.sc-dymIpo.izSiFn > div.withConditionalBorder.sc-bnXvFD.izlagV ' +
+    '> div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(3) > div > button';
+
+  await page.waitForSelector(continueSel1, { visible: true, timeout: 20000 });
+  await Promise.all([
+    page.click(continueSel1),
+    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }),
+  ]);
+});
+
+// 6) Enter password and Continue
+await withRetries(async () => {
+  await page.waitForSelector('input#password', { visible: true, timeout: 20000 });
+  await page.type('input#password', password, { delay: 50 });
+
+  const continueSel2 =
+    '#root > div > div > div.sc-dymIpo.izSiFn > div.withConditionalBorder.sc-bnXvFD.izlagV ' +
+    '> div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(4) > div > button';
+
+  await page.waitForSelector(continueSel2, { visible: true, timeout: 20000 });
+  await Promise.all([
+    page.click(continueSel2),
+    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {}),
+  ]);
+});
 
       // small extra buffer
       await new Promise(r => setTimeout(r, 10000));
