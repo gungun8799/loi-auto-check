@@ -3009,11 +3009,11 @@ app.post('/api/check-contract-status', async (req, res) => {
           page    = await browser.newPage();
 
           console.log('[STEP] navigating to Simplicity login');
-          await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
+          await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2', timeout: 60000  });
           await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 180000 });
           await Promise.all([
             page.click('#lblToLoginPage'),
-            page.waitForNavigation({ waitUntil: 'networkidle2' })
+            page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000  })
           ]);
           await new Promise(r => setTimeout(r, 5000));
           await page.waitForSelector('input#username', { visible: true, timeout: 60000 });
@@ -3309,19 +3309,19 @@ console.log('→ SIMPLICITY_PASS=', process.env.SIMPLICITY_PASS && '*****');
       page    = await browser.newPage();
       await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
 
-      await page.waitForSelector('#lblToLoginPage', { timeout: 20000 });
+      await page.waitForSelector('#lblToLoginPage', { timeout: 60000 });
       await page.click('#lblToLoginPage');
 
-      await page.waitForSelector('input#username', { timeout: 20000 });
+      await page.waitForSelector('input#username', { timeout: 60000 });
       await page.type('input#username', username, { delay: 50 });
       const continueSel1 = '#root > div > div > div.sc-dymIpo.izSiFn > div.withConditionalBorder.sc-bnXvFD.izlagV > div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(3) > div > button';
       await page.waitForSelector(continueSel1, { timeout: 20000 });
       await page.click(continueSel1);
 
-      await page.waitForSelector('input#password', { timeout: 20000 });
+      await page.waitForSelector('input#password', { timeout: 60000 });
       await page.type('input#password', password, { delay: 50 });
       const continueSel2 = '#root > div > div > div.sc-dymIpo.izSiFn > div.withConditionalBorder.sc-bnXvFD.izlagV > div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(4) > div > button';
-      await page.waitForSelector(continueSel2, { timeout: 20000 });
+      await page.waitForSelector(continueSel2, { timeout: 60000 });
       await page.click(continueSel2);
 
       await page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {});
@@ -3336,7 +3336,7 @@ console.log('→ SIMPLICITY_PASS=', process.env.SIMPLICITY_PASS && '*****');
     }
 
     // --- SCRAPE STEP ---
-    await page.waitForSelector('#menu_MenuLiteralDiv > ul > li:nth-child(10) > a', { timeout: 10000 });
+    await page.waitForSelector('#menu_MenuLiteralDiv > ul > li:nth-child(10) > a', { timeout: 60000 });
     await page.click('#menu_MenuLiteralDiv > ul > li:nth-child(10) > a');
     await new Promise(r => setTimeout(r, 500));
     await page.evaluate(() => {
@@ -3368,7 +3368,7 @@ console.log('→ SIMPLICITY_PASS=', process.env.SIMPLICITY_PASS && '*****');
       input.focus();
     }, contractNumber);
 
-    await frame.waitForSelector('a#panel_buttonSearch_bt', { visible: true, timeout: 10000 });
+    await frame.waitForSelector('a#panel_buttonSearch_bt', { visible: true, timeout: 60000 });
     await frame.evaluate(() => document.querySelector('a#panel_buttonSearch_bt')?.click());
     await new Promise(r => setTimeout(r, 15000));
 
