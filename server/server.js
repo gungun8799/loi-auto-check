@@ -1769,17 +1769,17 @@ for (let attempt = 1; attempt <= MAX_UTILITY_ATTEMPTS; attempt++) {
       const li = document.querySelector('#menu_MenuLiteralDiv > ul > li:nth-child(22)');
       li?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     });
-    await new Promise(r => setTimeout(r, 10000));
+    await new Promise(r => setTimeout(r, 30000));
 
-    // 3.4 click “Meter” submenu
+    // 3.4 click “Meter” submenu using the new selector
     console.log('[Utility] clicking Meter submenu');
     const clickedMeter = await page.evaluate(() => {
-      const menu = document.querySelector('#menu_MenuLiteralDiv > ul > li:nth-child(22) ul');
-      if (!menu) return false;
-      const a = Array.from(menu.querySelectorAll('a'))
-        .find(x => x.textContent.trim() === 'Meter');
-      if (a) { a.click(); return true; }
-      return false;
+      const el = document.querySelector(
+        '#form1 > div.holder > ul:nth-child(1) > li:nth-child(6) > a > span.function-code'
+      );
+      if (!el) return false;
+      el.click();
+      return true;
     });
     if (!clickedMeter) throw new Error('Could not click Meter submenu');
     console.log('[Utility] Meter submenu clicked');
@@ -2960,7 +2960,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       page    = await browser.newPage();
       const MAX_LOGIN_ATTEMPTS = 3;
       const LOGIN_RETRY_DELAY = 10_000;      // wait 10 s between retries
-      const NAV_LOGIN_TIMEOUT  = 120_000;     // give goto up to 60 s
+      const NAV_LOGIN_TIMEOUT  = 200_000;     // give goto up to 60 s
       
       const delay = ms => new Promise(res => setTimeout(res, ms));
       // ─── LOGIN ─────────────────────────────────────────────
@@ -2984,7 +2984,7 @@ app.post('/api/check-contract-status', async (req, res) => {
         }
 
       console.log('[STEP] clicking “go to login”');
-      await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 180000 });
+      await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 200000 });
       await Promise.all([
         page.click('#lblToLoginPage'),
         page.waitForNavigation({ waitUntil: 'networkidle2' })
