@@ -2925,7 +2925,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
 
       console.log('[STEP] clicking “go to login”');
-      await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 90000 });
+      await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 180000 });
       await Promise.all([
         page.click('#lblToLoginPage'),
         page.waitForNavigation({ waitUntil: 'networkidle2' })
