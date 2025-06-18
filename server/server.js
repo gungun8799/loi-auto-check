@@ -1746,104 +1746,119 @@ if (process.env.PUPPETEER_SERVICE_URL) {
     if (extractedData['Include Utility'] === 'Yes' && contractNumber.includes('LO')) {
       console.log('[Utility] Include Utility=Yes & LO… → scraping Meter…');
 
+      // ─── Utility scrape with retries ─────────────────────────────────────────
+const MAX_UTILITY_ATTEMPTS = 5;
+const UTILITY_RETRY_DELAY = 10_000;
+
+for (let attempt = 1; attempt <= MAX_UTILITY_ATTEMPTS; attempt++) {
+  try {
+    // 3.1 scroll so the Utilities button is visible
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    console.log('[Utility] scrolled down');
+    await new Promise(r => setTimeout(r, 2000));
+
+    // 3.2 click Utilities top-menu
+    const utilSel = '#menu_MenuLiteralDiv > ul > li:nth-child(22) > a > div.cssmenu-item-label';
+    console.log('[Utility] clicking Utilities top-menu');
+    await page.waitForSelector(utilSel, { visible: true, timeout: 20000 });
+    await page.click(utilSel);
+
+    // 3.3 hover to expand submenu
+    console.log('[Utility] hovering Utilities submenu');
+    await page.evaluate(() => {
+      const li = document.querySelector('#menu_MenuLiteralDiv > ul > li:nth-child(22)');
+      li?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    });
+    await new Promise(r => setTimeout(r, 10000));
+
+    // 3.4 click “Meter” submenu
+    console.log('[Utility] clicking Meter submenu');
+    const clickedMeter = await page.evaluate(() => {
+      const menu = document.querySelector('#menu_MenuLiteralDiv > ul > li:nth-child(22) ul');
+      if (!menu) return false;
+      const a = Array.from(menu.querySelectorAll('a'))
+        .find(x => x.textContent.trim() === 'Meter');
+      if (a) { a.click(); return true; }
+      return false;
+    });
+    if (!clickedMeter) throw new Error('Could not click Meter submenu');
+    console.log('[Utility] Meter submenu clicked');
+
+    // 3.5 wait & switch to bottom iframe
+    await new Promise(r => setTimeout(r, 10000));
+    const frameHandle = await page.waitForSelector('iframe[name="frameBottom"]', { timeout: 20000 });
+    const frame = await frameHandle.contentFrame();
+    await new Promise(r => setTimeout(r, 10000));
+
+    // ─── 3.6 Combined Unit ID + Building ID search ────────────────────
+    console.log('[Utility] preparing combined Unit ID + Building ID search');
+
+    // wait for the main search box
+    await frame.waitForSelector('#panel_SimpleSearch_c1', { visible: true, timeout: 20000 });
+
+    // pull the 4-digit Building ID from your parsedResult
+    const buildingRow = parsedResult.find(r => r.field === 'Building ID');
+    const buildingId = buildingRow?.value || '';
+    console.log('[Utility] fetched Building ID:', buildingId);
+
+    // build the combined search string
+    const unitId = extractedData['Unit ID'] || '';
+    const combinedSearch = buildingId
+      ? `${unitId} ${buildingId}`
+      : unitId;
+
+    console.log('[Utility] entering combined search:', combinedSearch);
+
+    // clear & type the combined string
+    await frame.click('#panel_SimpleSearch_c1', { clickCount: 3 });
+    await frame.type('#panel_SimpleSearch_c1', combinedSearch, { delay: 50 });
+
+    // click the initial Search button
+    console.log('[Utility] clicking Search');
+    await frame.evaluate(() => {
+      const btn = document.querySelector('a#panel_buttonSearch_bt');
+      btn?.click();
+    });
+    await new Promise(r => setTimeout(r, 15000));
+
+    // scrape immediately
+    utilityRaw = await frame.evaluate(() => document.body.innerText);
+    console.log('[Utility] scraped raw after combined search:', utilityRaw);
+
+    // 3.8 run Gemini on that Meter page
+    const meterPromptPath = path.join(__dirname, 'prompts', 'meter_check.txt');
+    if (fs.existsSync(meterPromptPath)) {
+      const meterTemplate = fs.readFileSync(meterPromptPath, 'utf8');
+      const meterPrompt = `${meterTemplate}\n\nMeter page content:\n${utilityRaw}`;
+      console.log('[Meter Validation] sending to Gemini');
+      const mRes = await model.generateContent(meterPrompt);
+      let mText = (await mRes.response.text()).trim();
+      if (mText.startsWith('```json')) mText = mText.slice(7);
+      if (mText.endsWith('```'))      mText = mText.slice(0, -3);
+
       try {
-        // 3.1 scroll so the Utilities button is visible
-        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-        console.log('[Utility] scrolled down');
-        await new Promise(r => setTimeout(r, 2000));
-
-        // 3.2 click Utilities top-menu
-        const utilSel = '#menu_MenuLiteralDiv > ul > li:nth-child(22) > a > div.cssmenu-item-label';
-        console.log('[Utility] clicking Utilities top-menu');
-        await page.waitForSelector(utilSel, { visible: true, timeout: 20000 });
-        await page.click(utilSel);
-
-        // 3.3 hover to expand submenu
-        console.log('[Utility] hovering Utilities submenu');
-        await page.evaluate(() => {
-          const li = document.querySelector('#menu_MenuLiteralDiv > ul > li:nth-child(22)');
-          li?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-        });
-        await new Promise(r => setTimeout(r, 10000));
-
-        // 3.4 click “Meter” submenu
-        console.log('[Utility] clicking Meter submenu');
-        const clickedMeter = await page.evaluate(() => {
-          const menu = document.querySelector('#menu_MenuLiteralDiv > ul > li:nth-child(22) ul');
-          if (!menu) return false;
-          const a = Array.from(menu.querySelectorAll('a'))
-            .find(x => x.textContent.trim() === 'Meter');
-          if (a) { a.click(); return true; }
-          return false;
-        });
-        if (!clickedMeter) throw new Error('Could not click Meter submenu');
-        console.log('[Utility] Meter submenu clicked');
-
-        // 3.5 wait & switch to bottom iframe
-        await new Promise(r => setTimeout(r, 10000));
-        const frameHandle = await page.waitForSelector('iframe[name="frameBottom"]', { timeout: 20000 });
-        const frame = await frameHandle.contentFrame();
-       
-        await new Promise(r => setTimeout(r, 10000));
-// ─── 3.6 Combined Unit ID + Building ID search ────────────────────
-console.log('[Utility] preparing combined Unit ID + Building ID search');
-
-// wait for the main search box
-await frame.waitForSelector('#panel_SimpleSearch_c1', { visible: true, timeout: 20000 });
-
-// pull the 4-digit Building ID from your parsedResult
-const buildingRow = parsedResult.find(r => r.field === 'Building ID');
-const buildingId = buildingRow?.value || '';
-console.log('[Utility] fetched Building ID:', buildingId);
-
-// build the combined search string
-const unitId = extractedData['Unit ID'] || '';
-const combinedSearch = buildingId
-  ? `${unitId} ${buildingId}`
-  : unitId;
-
-console.log('[Utility] entering combined search:', combinedSearch);
-
-// clear & type the combined string
-await frame.click('#panel_SimpleSearch_c1', { clickCount: 3 });
-await frame.type('#panel_SimpleSearch_c1', combinedSearch, { delay: 50 });
-
-// click the initial Search button
-console.log('[Utility] clicking Search');
-await frame.evaluate(() => {
-  const btn = document.querySelector('a#panel_buttonSearch_bt');
-  btn?.click();
-});
-await new Promise(r => setTimeout(r, 15000));
-
-// scrape immediately
-utilityRaw = await frame.evaluate(() => document.body.innerText);
-console.log('[Utility] scraped raw after combined search:', utilityRaw);
-
-
-        // 3.8 run Gemini on that Meter page
-        const meterPromptPath = path.join(__dirname, 'prompts', 'meter_check.txt');
-        if (fs.existsSync(meterPromptPath)) {
-          const meterTemplate = fs.readFileSync(meterPromptPath, 'utf8');
-          const meterPrompt = `${meterTemplate}\n\nMeter page content:\n${utilityRaw}`;
-          console.log('[Meter Validation] sending to Gemini');
-          const mRes = await model.generateContent(meterPrompt);
-          let mText = (await mRes.response.text()).trim();
-          if (mText.startsWith('```json')) mText = mText.slice(7);
-          if (mText.endsWith('```'))      mText = mText.slice(0, -3);
-
-          try {
-            meterValidation = JSON.parse(mText);
-            console.log('[Meter Validation] parsed:', meterValidation);
-          } catch (e) {
-            console.error('[Meter Validation] parse failed', e);
-          }
-        } else {
-          console.warn('[Meter Validation] prompt file missing, skipping');
-        }
-      } catch (err) {
-        console.error('[Utility] scrape failed, continuing:', err);
+        meterValidation = JSON.parse(mText);
+        console.log('[Meter Validation] parsed:', meterValidation);
+      } catch (e) {
+        console.error('[Meter Validation] parse failed', e);
       }
+    } else {
+      console.warn('[Meter Validation] prompt file missing, skipping');
+    }
+
+    // success: exit retry loop
+    break;
+
+  } catch (err) {
+    console.error(`[Utility] attempt ${attempt} failed:`, err);
+    if (attempt === MAX_UTILITY_ATTEMPTS) {
+      console.error('[Utility] all attempts failed, continuing without Meter data');
+      break;
+    }
+    console.log(`[Utility] retrying in ${UTILITY_RETRY_DELAY/1000}s…`);
+    await new Promise(r => setTimeout(r, UTILITY_RETRY_DELAY));
+  }
+}
     }
 
     // ─── 4) SAVE TO FIRESTORE ─────────────────────────────────────
@@ -2747,29 +2762,46 @@ async function checkIfFileExistsInFirebase(filename) {
       console.log(`[✅ STEP 1: Found] ${contractNumber} exists in compare_result.`);
 
       // ✅ STEP 2: Compare modified timestamp
-      console.log(`[STEP 2] 🕒 Comparing modified time for ${contractNumber}...`);
-      const fileModifiedTime = fs.statSync(filePath).mtime;
-      const BASE_URL = process.env.API_URL || `http://localhost:${PORT}`;
-      const timestampRes = await axios.get(
-        `${BASE_URL}/api/check-file-timestamp`,
-        { params: { filename: contractNumber } }
-      );
+console.log(`[STEP 2] 🕒 Comparing modified time for ${contractNumber}...`);
+const fileModifiedTime = fs.statSync(filePath).mtime;
 
-      const { exists, updatedAt } = timestampRes.data;
+// hit your timestamp‐check endpoint...
+const BASE_URL = process.env.API_URL || `http://localhost:${PORT}`;
+const { data } = await axios.get(
+  `${BASE_URL}/api/check-file-timestamp`,
+  { params: { filename: contractNumber } }
+);
+const { exists, updatedAt } = data;
 
-      if (exists && updatedAt) {
-        const firebaseDate = new Date(updatedAt);
-        console.log(`[STEP 2] 🔄 File modified: ${fileModifiedTime.toISOString()} vs Firebase: ${firebaseDate.toISOString()}`);
+if (exists && updatedAt) {
+  // — normalize updatedAt into a JS Date —
+  let firebaseDate;
+  if (updatedAt._seconds != null) {
+    // Firestore Timestamp object
+    firebaseDate = new Date(
+      updatedAt._seconds * 1000 +
+      (updatedAt._nanoseconds || 0) / 1e6
+    );
+  } else {
+    // assume ISO string or millis
+    firebaseDate = new Date(updatedAt);
+  }
 
-        if (firebaseDate >= fileModifiedTime) {
-          console.log(`[❌ Skipping] Firebase timestamp is newer or equal. ${contractNumber} already processed.`);
-          return true;
-        } else {
-          console.log(`[⚠️ STEP 2: Firebase is older] Proceeding to check contract status.`);
-        }
-      } else {
-        console.log(`[⚠️ STEP 2: No timestamp] Proceeding to check contract status.`);
-      }
+  console.log(
+    `[STEP 2] 🔄 File modified:    ${fileModifiedTime.toISOString()}\n` +
+    `           Firebase stored:  ${firebaseDate.toISOString()}`
+  );
+
+  if (firebaseDate.getTime() >= fileModifiedTime.getTime()) {
+    console.log(`[❌ Skipping] Firebase timestamp is newer or equal. ${contractNumber} already processed.`);
+    return true;
+  } else {
+    console.log(`[⚠️ STEP 2: Firebase is older] Proceeding to check contract status.`);
+  }
+
+} else {
+  console.log(`[⚠️ STEP 2: No timestamp] Proceeding to check contract status.`);
+}
     } else {
       console.log(`[✅ STEP 1: Not found] ${contractNumber} not yet in compare_result. Skipping timestamp check.`);
     }
