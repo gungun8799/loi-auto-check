@@ -2995,73 +2995,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       console.log('[STEP] Simplicity login complete');
 
       browserSessions.set(systemType, { browser, page });
-    } else {
-      console.log('[STEP] reusing existing Puppeteer session');
-      ({ browser, page } = browserSessions.get(systemType));
-
-      // ─── Health-check for a detached frame ────────────────────────
-      try {
-        await page.title();   // will throw if the page or its frames are detached
-      } catch (err) {
-        if (err.message.includes('detached Frame')) {
-          console.warn('[STEP] Detached Frame detected; resetting session');
-
-          // tear down old session
-          await page.close().catch(()=>{});
-          await browser.close().catch(()=>{});
-          browserSessions.delete(systemType);
-
-          // re-launch & re-login exactly as in your “new Puppeteer session” branch:
-          browser = await puppeteer.launch(launchOptions);
-          page    = await browser.newPage();
-
-          console.log('[STEP] navigating to Simplicity login');
-          await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2', timeout: 60000  });
-          await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 180000 });
-          await Promise.all([
-            page.click('#lblToLoginPage'),
-            page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000  })
-          ]);
-          await new Promise(r => setTimeout(r, 5000));
-          await page.waitForSelector('input#username', { visible: true, timeout: 60000 });
-          await page.type('input#username', user.toString(), { delay: 50 });
-          await page.waitForSelector(continueSel1, { visible: true, timeout: 60000 });
-          await page.click(continueSel1);
-          await new Promise(r => setTimeout(r, 5000));
-          await page.waitForSelector('input#password', { visible: true, timeout: 60000 });
-          await page.type('input#password', pass.toString(), { delay: 50 });
-          await page.waitForSelector(continueSel2, { visible: true, timeout: 60000 });
-          await Promise.all([
-            page.click(continueSel2),
-            page.waitForNavigation({ waitUntil: 'networkidle2' })
-          ]);
-          await new Promise(r => setTimeout(r, 15000));
-
-          // verify login succeeded
-          const html = await page.content();
-          if (html.includes('Invalid login')) {
-            console.error('[ERROR] Invalid credentials');
-            await browser.close();
-            return res.status(401).json({ message: 'Invalid credentials' });
-          }
-          console.log('[STEP] Simplicity login complete');
-
-          // store the fresh session
-          browserSessions.set(systemType, { browser, page });
-        } else {
-          // some other error — rethrow it
-          throw err;
-        }
-      }
-
-      // ─── cleanup extra tabs & re-goto home─────────────────────────
-      const pages = await browser.pages();
-      for (let i = 1; i < pages.length; i++) {
-        await pages[i].close().catch(() => {});
-      }
-      await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
-      await new Promise(r => setTimeout(r, 2000));
-    }
+    } 
 
     // small buffer
     await new Promise(r => setTimeout(r, 5000));
