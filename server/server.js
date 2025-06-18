@@ -2919,10 +2919,30 @@ app.post('/api/check-contract-status', async (req, res) => {
       console.log('[STEP] launching new Puppeteer session');
       browser = await puppeteer.launch(launchOptions);
       page    = await browser.newPage();
-
+      const MAX_LOGIN_ATTEMPTS = 3;
+      const LOGIN_RETRY_DELAY = 10_000;      // wait 10 s between retries
+      const NAV_LOGIN_TIMEOUT  = 60_000;     // give goto up to 60 s
+      
+      const delay = ms => new Promise(res => setTimeout(res, ms));
       // ─── LOGIN ─────────────────────────────────────────────
       console.log('[STEP] navigating to Simplicity login');
-      await page.goto('https://mall-management.lotuss.com/Simplicity/apptop.aspx', { waitUntil: 'networkidle2' });
+        for (let attempt = 1; attempt <= MAX_LOGIN_ATTEMPTS; attempt++) {
+          try {
+            console.log(`[STEP] login navigation attempt ${attempt}`);
+            await page.goto(
+              'https://mall-management.lotuss.com/Simplicity/apptop.aspx',
+              { waitUntil: 'networkidle2', timeout: NAV_LOGIN_TIMEOUT }
+            );
+            break;  // success!
+          } catch (err) {
+            console.warn(`[STEP] login navigation attempt ${attempt} failed: ${err.message}`);
+            if (attempt === MAX_LOGIN_ATTEMPTS) {
+              throw new Error(`Login navigation failed after ${MAX_LOGIN_ATTEMPTS} attempts`);
+            }
+            console.log(`[STEP] retrying login in ${LOGIN_RETRY_DELAY/1000}s…`);
+            await delay(LOGIN_RETRY_DELAY);
+          }
+        }
 
       console.log('[STEP] clicking “go to login”');
       await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 180000 });
