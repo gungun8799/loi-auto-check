@@ -2893,6 +2893,13 @@ app.post('/api/check-contract-status', async (req, res) => {
 
     // ─── Otherwise, run local Puppeteer logic ─────────────────────────────────
     const systemType = 'simplicity';
+    // ─── Force a fresh Puppeteer session on every request ─────────
+    if (browserSessions.has(systemType)) {
+      const { browser, page } = browserSessions.get(systemType);
+      await page.close().catch(() => {});
+      await browser.close().catch(() => {});
+      browserSessions.delete(systemType);
+    }
     let browser, page;
 
     const isLocal = process.env.NODE_ENV !== 'production';
@@ -2921,7 +2928,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       page    = await browser.newPage();
       const MAX_LOGIN_ATTEMPTS = 3;
       const LOGIN_RETRY_DELAY = 10_000;      // wait 10 s between retries
-      const NAV_LOGIN_TIMEOUT  = 60_000;     // give goto up to 60 s
+      const NAV_LOGIN_TIMEOUT  = 120_000;     // give goto up to 60 s
       
       const delay = ms => new Promise(res => setTimeout(res, ms));
       // ─── LOGIN ─────────────────────────────────────────────
