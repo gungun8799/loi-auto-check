@@ -2,7 +2,7 @@
 FROM node:18-slim
 
 
-// ─── Fix missing APT lists/partial directory ─────────────────────────────────
+#// ─── Fix missing APT lists/partial directory ─────────────────────────────────
 RUN rm -rf /var/lib/apt/lists/* \
   && mkdir -p /var/lib/apt/lists/partial \
   && chmod 0755 /var/lib/apt/lists /var/lib/apt/lists/partial
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 
-// ─── Install Xvfb and supporting libraries ────────────────────────────────────
+#// ─── Install Xvfb and supporting libraries ────────────────────────────────────
 RUN apt-get update && apt-get install -y \
       xvfb \
       x11-utils \
