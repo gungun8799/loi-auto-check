@@ -332,7 +332,7 @@ app.post('/api/process-pdf', async (req, res) => {
     try {
       const isProd = process.env.NODE_ENV === 'production';
       const launchOptions = {
-        headless: isProd,
+        headless: true,
         dumpio: false,    // don’t pipe Chrome’s own logs
         args: isProd
           ? [
@@ -835,7 +835,7 @@ app.post('/api/scrape-url', async (req, res) => {
         // —— NEW LAUNCH LOGIC —— 
         const isProd = process.env.NODE_ENV === 'production';
         const launchOpts = {
-          headless:  false,                           // prod: headless, local: headed
+          headless:  true,                           // prod: headless, local: headed
           dumpio:    false,
           args:      isProd
             ? [
@@ -1015,6 +1015,14 @@ app.post('/api/scrape-url', async (req, res) => {
         console.warn(`⚠️ Could not expand ${sel}:`, e.message);
       }
     }
+      // ─── Scroll the Monthly Charges grid so Year 1/2/3 rows render ───────────
+      console.log('[Utility] scrolling Monthly Charges grid to load all rows');
+      await popup.waitForSelector('#MonthlyCharges_d2', { visible: true, timeout: 15000 });
+      await popup.evaluate(() => {
+        const grid = document.querySelector('#MonthlyCharges_d2');
+        if (grid) grid.scrollTop = grid.scrollHeight;
+      });
+      await new Promise(r => setTimeout(r, 5000));
 
     const scrapedText = await popup.evaluate(() => document.body.innerText);
     console.log('[Simplicity] Scraped content length:', scrapedText.length);
@@ -1273,7 +1281,7 @@ app.post('/api/scrape-login', async (req, res) => {
 
       const isProd = process.env.NODE_ENV === 'production';
       const launchOptions = {
-        headless: isProd,
+        headless: true,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -1616,7 +1624,7 @@ if (process.env.PUPPETEER_SERVICE_URL) {
     
       const isProd = process.env.NODE_ENV === 'production';
       const launchOptions = {
-        headless: isProd,
+        headless: true,
         defaultViewport: null,
         args: [
           '--no-sandbox',
@@ -2196,7 +2204,7 @@ app.post('/api/refresh-contract-status', async (req, res) => {
     
       const isProd = process.env.NODE_ENV === 'production';
       const launchOptions = {
-        headless: isProd,
+        headless: true,
         defaultViewport: null,
         args: [
           '--no-sandbox',
@@ -3260,7 +3268,7 @@ console.log('→ SIMPLICITY_PASS=', process.env.SIMPLICITY_PASS && '*****');
     } else {
       const isProd = process.env.NODE_ENV === 'production';
       const launchOpts = {
-        headless: isProd,
+        headless: true,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
