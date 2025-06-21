@@ -55,16 +55,13 @@ RUN mkdir -p contracts processed tmp_uploads \
 RUN mkdir -p /tmp/.X11-unix \
 && chmod 1777 /tmp/.X11-unix
 
-USER node
-
-
-
-
-EXPOSE 5001
-
-# copy our startup script
+# ─── Copy & prepare our entrypoint (still running as root) ──────────────
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+USER node
+
+EXPOSE 5001
 
 # delegate to entrypoint.sh (which will start Xvfb then run node)
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
