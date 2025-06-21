@@ -960,38 +960,26 @@ app.post('/api/scrape-url', async (req, res) => {
       console.error('❌ View icon not found');
       throw new Error('View icon not found');
     }
-    await viewButton.click();
-
-    const popupUrlMatch = isLeaseOffer
-      ? 'leaseoffer/edit.aspx'
-      : 'leaserenewal/edit.aspx';
-
-    // Close any old popups
-    for (const p of await browser.pages()) {
-      const url = p.url();
-      if (
-        (url.includes('leaseoffer/edit.aspx') ||
-         url.includes('leaserenewal/edit.aspx')) &&
-        p !== page
-      ) {
-        await p.close();
-      }
-    }
-
-    // Wait for the new popup
-    let popup;
-    for (let i = 0; i < 15; i++) {
-      const pages = await browser.pages();
-      popup = pages.find(p => p.url().includes(popupUrlMatch) && p !== page);
-      if (popup) break;
-      await new Promise(r => setTimeout(r, 2000));
-    }
-    if (!popup) {
-      console.error('❌ Popup window not found for:', popupUrlMatch);
-      throw new Error('Popup window not found');
-    }
-
-    await popup.bringToFront();
+        // Listen for the new popup window
+        const popupUrlMatch = isLeaseOffer
+          ? 'leaseoffer/edit.aspx'
+          : 'leaserenewal/edit.aspx';
+    
+        const popupTargetPromise = browser.waitForTarget(
+          target => target.url().includes(popupUrlMatch),
+          { timeout: 60000 }
+        );
+    
+        // Click the view icon and race to capture the popup target
+        await viewButton.click();
+        const popupTarget = await popupTargetPromise;
+    
+        // Get the Page object and bring it to front
+        const popup = await popupTarget.page();
+        if (!popup) {
+          throw new Error(`Could not instantiate popup for ${popupUrlMatch}`);
+        }
+        await popup.bringToFront();
     await popup.waitForFunction(
       () => document.body && document.body.innerText.trim().length > 0,
       { timeout: 60000 }
