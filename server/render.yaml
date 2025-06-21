@@ -1,0 +1,8 @@
+# render.yaml
+
+services:
+  - type: web
+    name: my-vision-app            # match your service name in Render
+    env: docker
+    internalPort: 5001             # <— this is the port your app EXPOSEs and listens on
+    dockerfilePath: Dockerfile     # path to your Dockerfile
