@@ -835,7 +835,7 @@ app.post('/api/scrape-url', async (req, res) => {
         // —— NEW LAUNCH LOGIC —— 
         const isProd = process.env.NODE_ENV === 'production';
         const launchOpts = {
-          headless:  isProd,                           // prod: headless, local: headed
+          headless:  false,                           // prod: headless, local: headed
           dumpio:    false,
           args:      isProd
             ? [
@@ -845,7 +845,8 @@ app.post('/api/scrape-url', async (req, res) => {
                 '--disable-gpu',
                 '--disable-software-rasterizer',
                 '--single-process',
-                '--disable-dbus-for-chrome'
+                '--disable-dbus-for-chrome',
+                '--display=:0'     // use Xvfb’s display
               ]
             : ['--start-fullscreen'],
           ...(isProd && process.env.PUPPETEER_EXECUTABLE_PATH

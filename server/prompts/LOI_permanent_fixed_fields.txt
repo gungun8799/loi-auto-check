@@ -33,24 +33,35 @@ Extract key fields from the following rent contract content and return these fie
   "Lease property tax rate" (check for two type of field, type like "PTS - PT Standard", "PT - MALL", or number "10", "12.5"),
   "Monthly charge", (Output in "Yes", or "No"),
   
-These fileds will be the rental rate, start date and end date of the monthly rent in 3 years, for PDF doc Need to check "4. ค่าเช่าและบริการ" section
-  "Year 1 : Contract Start date",
-  "Year 1 : Contract End date",
-  "Year 1 : Charge Type", (for PDF heck from section "4.ค่าเช่าและค่าบริการ" if it's "Fixed rate" or "Not Fixed rate")
-  "Year 1 : Monthly Amount of rent",
-  "Year 1 : Monthly Amount of service",
+These fields will be the rental rate, start date and end date of the monthly rent for each of the 3 years. On the first page of the PDF, locate section “4. ค่าเช่าและค่าบริการ” and extract exactly:
 
-  "Year 2 : Contract Start date",
-  "Year 2 : Contract End date",
-  "Year 2 : Charge Type",(for PDF heck from section "4.ค่าเช่าและค่าบริการ" if it's "Fixed rate" or "Not Fixed rate")
-  "Year 2 : Monthly Amount of rent",
-  "Year 2 : Monthly Amount of service",
+“Year 1 : Contract Start date”  
+“Year 1 : Contract End date”  
+“Year 1 : Charge Type”  
+“Year 1 : Monthly Amount of rent”  
+“Year 1 : Monthly Amount of service”  
 
-  "Year 3 : Contract Start date",
-  "Year 3 : Contract End date",
-  "Year 3 : Charge Type",(for PDF heck from section "4.ค่าเช่าและค่าบริการ" if it's "Fixed rate" or "Not Fixed rate")
-  "Year 3 : Monthly Amount of rent",
-  "Year 3 : Monthly Amount of service",
+“Year 2 : Contract Start date”  
+“Year 2 : Contract End date”  
+“Year 2 : Charge Type”  
+“Year 2 : Monthly Amount of rent”  
+“Year 2 : Monthly Amount of service”  
+
+“Year 3 : Contract Start date”  
+“Year 3 : Contract End date”  
+“Year 3 : Charge Type”  
+“Year 3 : Monthly Amount of rent”  
+“Year 3 : Monthly Amount of service”  
+
+Rules:  
+- **Dates**: Accept any valid date format, for example  
+  - Thai “D MMMM YYYY” (e.g. “31 พฤษภาคม 2569”)  
+  - English “DD-MMM-YYYY” (e.g. “31-May-2026”)  
+  - ISO “YYYY-MM-DD” (e.g. “2026-05-31”)  
+  Always return the date **exactly** as it appears in the document.  
+- **Charge Type**: Return exactly “Fixed rate” or “Not Fixed rate.”  
+- **Amounts**: Return the numeric value as shown, including commas, decimals, and any currency symbol.  
+- If any field is missing or cannot be parsed, return “—” for that field.
 
   "Other service charge (in the renting space)",if you cannot find anything, put the value as 0.00
   "Other service charge (in the renting space) Charge description",

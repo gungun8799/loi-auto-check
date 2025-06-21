@@ -37,5 +37,20 @@ RUN mkdir -p contracts processed tmp_uploads \
 
 USER node
 
+# 1) Install Xvfb and fonts
+RUN apt-get update && \
+    apt-get install -y xvfb x11-utils libnss3 fonts-liberation && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2) Copy your app
+WORKDIR /usr/src/app
+COPY package*.json ./
+RUN npm install --production
+COPY . .
+
+# 3) Wrap npm start in xvfb-run
+CMD ["xvfb-run", "--auto-servernum", "--server-args=-screen 0 1280x720x24", "npm", "start"]
+
+
 EXPOSE 5001
 CMD ["node", "server.js"]
