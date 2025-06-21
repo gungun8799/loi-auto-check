@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
-# 1) Launch Xvfb on display 99
+# 1) Ensure X11 socket dir exists (in case /tmp was reset)
+mkdir -p /tmp/.X11-unix
+chmod 1777 /tmp/.X11-unix
+
+# 2) Start Xvfb on :99 in the background
 Xvfb :99 -screen 0 1280x720x24 &
 
-# 2) Point Chrome/Puppeteer at that display
+# 3) Tell Chrome/Puppeteer to use that display
 export DISPLAY=:99
 
-# 3) Now exec Node as the main process
-exec node server.js
+# 4) Exec the CMD (node server.js) as PID 1 under Xvfb
+exec "$@"

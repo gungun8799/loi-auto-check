@@ -61,8 +61,11 @@ USER node
 
 
 EXPOSE 5001
-# Copy and use our entrypoint
-COPY entrypoint.sh /entrypoint.sh
-ENTRYPOINT ["/entrypoint.sh"]
 
-CMD [ "node", "server.js"]
+# copy our startup script
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# delegate to entrypoint.sh (which will start Xvfb then run node)
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["node", "server.js"]
