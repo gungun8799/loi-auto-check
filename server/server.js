@@ -1662,25 +1662,25 @@ if (process.env.PUPPETEER_SERVICE_URL) {
       });
 
       console.log('[LOGIN] clicking “go to login”');
-      await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 20000 });
+      await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 200000 });
       await Promise.all([
         page.click('#lblToLoginPage'),
         page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {})
       ]);
 
       console.log('[LOGIN] entering username');
-      await page.waitForSelector('input#username', { visible: true, timeout: 20000 });
+      await page.waitForSelector('input#username', { visible: true, timeout: 200000 });
       await page.type('input#username', 'john.pattanakarn@lotuss.com', { delay: 50 });
 
       const continueSel1 =
         '#root > div > div > div.sc-dymIpo.izSiFn > div.withConditionalBorder.sc-bnXvFD.izlagV ' +
         '> div.sc-jzgbtB.bIuYUf > form > div > div:nth-child(3) > div > button';
       console.log('[LOGIN] clicking Continue after username');
-      await page.waitForSelector(continueSel1, { visible: true, timeout: 20000 });
+      await page.waitForSelector(continueSel1, { visible: true, timeout: 200000 });
       await page.click(continueSel1);
 
       console.log('[LOGIN] entering password');
-      await page.waitForSelector('input#password', { visible: true, timeout: 20000 });
+      await page.waitForSelector('input#password', { visible: true, timeout: 200000 });
       await page.type('input#password', 'Gofresh@0425-21', { delay: 50 });
 
       const continueSel2 =
@@ -2985,7 +2985,7 @@ app.post('/api/check-contract-status', async (req, res) => {
         }
 
       console.log('[STEP] clicking “go to login”');
-      await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 200000 });
+      await page.waitForSelector('#lblToLoginPage', { visible: true, timeout: 300000 });
       await Promise.all([
         page.click('#lblToLoginPage'),
         page.waitForNavigation({ waitUntil: 'networkidle2' })
@@ -2995,7 +2995,7 @@ app.post('/api/check-contract-status', async (req, res) => {
       await new Promise(r => setTimeout(r, 5000));
 
       console.log('[STEP] typing username');
-      await page.waitForSelector('input#username', { visible: true, timeout: 60000 });
+      await page.waitForSelector('input#username', { visible: true, timeout: 200000 });
       await page.type('input#username', user.toString(), { delay: 50 });
 
       console.log('[STEP] clicking Continue #1');
