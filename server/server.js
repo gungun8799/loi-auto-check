@@ -2962,6 +2962,10 @@ app.post('/api/check-contract-status', async (req, res) => {
       const MAX_LOGIN_ATTEMPTS = 3;
       const LOGIN_RETRY_DELAY = 10_000;      // wait 10 s between retries
       const NAV_LOGIN_TIMEOUT  = 200_000;     // give goto up to 60 s
+      // make all navigation waits use up to NAV_LOGIN_TIMEOUT
+      page.setDefaultNavigationTimeout(NAV_LOGIN_TIMEOUT);
+      // you can also extend other waits (like waitForSelector) globally:
+      page.setDefaultTimeout(NAV_LOGIN_TIMEOUT);
       
       const delay = ms => new Promise(res => setTimeout(res, ms));
       // ─── LOGIN ─────────────────────────────────────────────
