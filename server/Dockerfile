@@ -1,6 +1,13 @@
 # ─── Base image with Node.js ────────────────────────────────────────────────
 FROM node:18-slim
 
+
+// ─── Fix missing APT lists/partial directory ─────────────────────────────────
+RUN rm -rf /var/lib/apt/lists/* \
+  && mkdir -p /var/lib/apt/lists/partial \
+  && chmod 0755 /var/lib/apt/lists /var/lib/apt/lists/partial
+
+
 # ─── Install Chrome Stable ──────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y \
       wget gnupg ca-certificates \
@@ -11,6 +18,15 @@ RUN apt-get update && apt-get install -y \
     && apt-get update && apt-get install -y \
       google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
+
+
+// ─── Install Xvfb and supporting libraries ────────────────────────────────────
+RUN apt-get update && apt-get install -y \
+      xvfb \
+      x11-utils \
+      libnss3 \
+      fonts-liberation \
+      && rm -rf /var/lib/apt/lists/*
 
 # ─── Tell Puppeteer where to find Chrome ────────────────────────────────────
 # This lets your code use the system Chrome you just installed.
@@ -37,20 +53,8 @@ RUN mkdir -p contracts processed tmp_uploads \
 
 USER node
 
-# 1) Install Xvfb and fonts
-RUN apt-get update && \
-    apt-get install -y xvfb x11-utils libnss3 fonts-liberation && \
-    rm -rf /var/lib/apt/lists/*
 
-# 2) Copy your app
-WORKDIR /usr/src/app
-COPY package*.json ./
-RUN npm install --production
-COPY . .
-
-# 3) Wrap npm start in xvfb-run
-CMD ["xvfb-run", "--auto-servernum", "--server-args=-screen 0 1280x720x24", "npm", "start"]
 
 
 EXPOSE 5001
-CMD ["node", "server.js"]
+CMD ["xvfb-run", "--auto-servernum", "--server-args=-screen 0 1280x720x24", "node", "server.js"]
