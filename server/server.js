@@ -876,7 +876,7 @@ app.post('/api/scrape-url', async (req, res) => {
 
         // confirm login by checking for a dashboard-specific element
         const postLoginSelector = 'selector-you-see-after-login';
-        await page.waitForSelector(postLoginSelector, { timeout: 10000 });
+        await page.waitForSelector(postLoginSelector, { timeout: 500000 });
 
         // store session for reuse
         // grab the stored session
@@ -899,11 +899,11 @@ app.post('/api/scrape-url', async (req, res) => {
     console.log(`[Simplicity] Navigating Lease > ${submenuText}...`);
     await page.waitForSelector(
       '#menu_MenuLiteralDiv > ul > li:nth-child(10) > a',
-      { timeout: 10000 }
+      { timeout: 500000 }
     );
     await page.click('#menu_MenuLiteralDiv > ul > li:nth-child(10) > a');
     await page.mouse.click(5, 5);
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 500000));
 
     await page.evaluate(() => {
       const leaseMenu = [...document.querySelectorAll('a')].find(
