@@ -51,6 +51,10 @@ RUN mkdir -p contracts processed tmp_uploads \
   && chmod -R 755 contracts processed tmp_uploads \
   && chown -R node:node contracts processed tmp_uploads
 
+# ─── Ensure the X11 socket dir exists (world‐writable) ────────────────────
+RUN mkdir -p /tmp/.X11-unix \
+&& chmod 1777 /tmp/.X11-unix
+
 USER node
 
 
