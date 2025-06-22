@@ -34,13 +34,16 @@ function LOIDashboard({ user }) {
   // at the top of LOIDashboard(), right after your other useState calls:
 const [editingWorkflowFor, setEditingWorkflowFor] = useState(null);
   const [refreshingContracts, setRefreshingContracts] = useState({});
-  const [filters, setFilters] = useState({
-    workflowStatus: '',
-    tenantType: '',
-    status: '',
-    search: '',
-    leadStatus: ''  // ← new
-  });
+   const [filters, setFilters] = useState({
+       workflowStatus: '',
+       tenantTypes:   [],    // ← multi
+       leaseTypes:    [],    // ← multi
+       status:        '',
+       search:        '',
+       leadStatus:    ''
+     });
+     // at the top of LOIDashboard, after your other useState calls:
+
   const [leadStatuses, setLeadStatuses] = useState({});
   const handleLogout = () => {
    localStorage.removeItem('user');
@@ -145,6 +148,18 @@ const [exportTo, setExportTo] = useState('');     // e.g. "2025-06-10"
     if (filters.tenantType) {
       filteredData = filteredData.filter(contract => contract.tenant_type === filters.tenantType);
     }
+     // multi-tenant-type support
+ if (filters.tenantTypes.length > 0) {
+   filteredData = filteredData.filter(c =>
+     filters.tenantTypes.includes(c.tenant_type)
+   );
+ }
+ // same for leaseTypes
+ if (filters.leaseTypes.length > 0) {
+   filteredData = filteredData.filter(c =>
+     filters.leaseTypes.includes(c.lease_type)
+   );
+ }
     if (filters.status) {
       filteredData = filteredData.filter(contract => isValid(contract) === (filters.status === 'Passed'));
     }
@@ -170,6 +185,30 @@ const [exportTo, setExportTo] = useState('');     // e.g. "2025-06-10"
       : false;
     return validationValid && compareValid;
   };
+
+  // control the open/closed state of each dropdown
+const [showLeaseDropdown,  setShowLeaseDropdown]  = useState(false);
+const [showTenantDropdown, setShowTenantDropdown] = useState(false);
+
+// toggle a single Lease Type on/off
+const toggleLeaseType = (type) => {
+  setFilters(prev => {
+    const list = prev.leaseTypes.includes(type)
+      ? prev.leaseTypes.filter(t => t !== type)
+      : [...prev.leaseTypes, type];
+    return { ...prev, leaseTypes: list };
+  });
+};
+
+// toggle a single Tenant Type on/off
+const toggleTenantType = (type) => {
+  setFilters(prev => {
+    const list = prev.tenantTypes.includes(type)
+      ? prev.tenantTypes.filter(t => t !== type)
+      : [...prev.tenantTypes, type];
+    return { ...prev, tenantTypes: list };
+  });
+};
 
   const computeWeeklyStats = (contracts) => {
     const now = new Date();
@@ -339,6 +378,31 @@ const exportBetween = (fromRaw, toRaw) => {
   XLSX.utils.book_append_sheet(wb, ws, 'Contracts');
   XLSX.writeFile(wb, 'contracts.xlsx');
 };
+// new state for our dropdowns
+const [tenantTypes, setTenantTypes] = useState([]);
+const [leaseTypes, setLeaseTypes] = useState([]);
+
+useEffect(() => {
+  async function fetchData() {
+    const res = await api.get('/get-compare-results');
+    const raw = res.data.data || [];
+    setContracts(raw);
+    setFilteredContracts(raw);
+    // compute unique lists
+    setTenantTypes(Array.from(new Set(raw.map(c => c.tenant_type).filter(Boolean))));
+    setLeaseTypes  (Array.from(new Set(raw.map(c => c.lease_type).filter(Boolean))));
+    computeWeeklyStats(raw);
+    // … the rest of your fetchData …
+    // build unique lists for our filters
+setTenantTypes(Array.from(
+  new Set(raw.map(c => c.tenant_type).filter(Boolean))
+));
+setLeaseTypes(Array.from(
+  new Set(raw.map(c => c.lease_type).filter(Boolean))
+));
+  }
+  fetchData();
+}, []);
 
   const handleLeadStatusChange = async (contractId, status) => {
     setLeadStatuses(prev => ({ ...prev, [contractId]: status }));
@@ -377,6 +441,8 @@ const exportBetween = (fromRaw, toRaw) => {
       console.error(err);
     }
   };
+
+  
 
   const autoProcessContracts = async () => {
     // Start both loading and processing flags
@@ -660,22 +726,113 @@ const getContractDate = (ts) => {
     value={filters.search}
     onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
   />
-  <select onChange={e => setFilters(prev => ({ ...prev, status: e.target.value }))}>
-    <option value="">Select Status</option>
-    <option value="Passed">Passed</option>
-    <option value="Needs Review">Needs Review</option>
-  </select>
-  <select onChange={e => setFilters(prev => ({ ...prev, workflowStatus: e.target.value }))}>
-    <option value="">Select Workflow Status</option>
-    <option value="Accepted">Accepted</option>
-    <option value="In Progress">In Progress</option>
-    <option value="Pending">Pending</option>
-  </select>
-  <select onChange={e => setFilters(prev => ({ ...prev, tenantType: e.target.value }))}>
-    <option value="">Select Tenant Type</option>
-    <option value="PND - PN Financial Service - ATM">PND - PN Financial Service - ATM</option>
-    <option value="Commercial">Commercial</option>
-  </select>
+{/* Status */}
+<select
+  value={filters.status}
+  onChange={e =>
+    setFilters(prev => ({ ...prev, status: e.target.value }))
+  }
+>
+  <option value="">Select Status</option>
+  <option value="Passed">Passed</option>
+  <option value="Needs Review">Needs Review</option>
+</select>
+
+{/* Workflow Status */}
+<select
+  value={filters.workflowStatus}
+  onChange={e =>
+    setFilters(prev => ({ ...prev, workflowStatus: e.target.value }))
+  }
+>
+  <option value="">Select Workflow Status</option>
+  <option value="Accepted">Accepted</option>
+  <option value="In Progress">In Progress</option>
+  <option value="Pending">Pending</option>
+</select>
+
+{/* Lease Type (multi-select) */}
+{/* ─── Lease Type Dropdown ─────────────────── */}
+{/* ─── Lease Type Dropdown ────────────────── */}
+<div className={styles.dropdownWrapper}>
+  <button
+    className={styles.dropdownToggle}
+    onClick={() => setShowLeaseDropdown(open => !open)}
+  >
+    Lease Type
+    {filters.leaseTypes.length > 0 && ` (${filters.leaseTypes.length})`}
+  </button>
+
+  {showLeaseDropdown && (
+    <div
+      className={
+        `${styles.dropdownMenu} ` +
+        `${styles.multiSelectContainer}`
+      }
+    >
+      <button
+        className={styles.clearButton}
+        onClick={() =>
+          setFilters(prev => ({ ...prev, leaseTypes: [] }))
+        }
+      >
+        Clear
+      </button>
+
+      {leaseTypes.map(type => (
+        <label key={type}>
+          <input
+            type="checkbox"
+            checked={filters.leaseTypes.includes(type)}
+            onChange={() => toggleLeaseType(type)}
+          />
+          <span>{type}</span>
+        </label>
+      ))}
+    </div>
+  )}
+</div>
+
+
+{/* ─── Tenant Type Dropdown ────────────────── */}
+<div className={styles.dropdownWrapper}>
+  <button
+    className={styles.dropdownToggle}
+    onClick={() => setShowTenantDropdown(open => !open)}
+  >
+    Tenant Type
+    {filters.tenantTypes.length > 0 && ` (${filters.tenantTypes.length})`}
+  </button>
+
+  {showTenantDropdown && (
+    <div
+      className={
+        `${styles.dropdownMenu} ` +
+        `${styles.multiSelectContainer}`
+      }
+    >
+      <button
+        className={styles.clearButton}
+        onClick={() =>
+          setFilters(prev => ({ ...prev, tenantTypes: [] }))
+        }
+      >
+        Clear
+      </button>
+
+      {tenantTypes.map(type => (
+        <label key={type}>
+          <input
+            type="checkbox"
+            checked={filters.tenantTypes.includes(type)}
+            onChange={() => toggleTenantType(type)}
+          />
+          <span>{type}</span>
+        </label>
+      ))}
+    </div>
+  )}
+</div>
 
   <select
     value={filters.leadStatus}
@@ -1100,6 +1257,8 @@ function FileExplorer({ onClose }) {
     fetchTree('');
   }, []);
 
+
+  
   const fetchTree = async (path) => {
     try {
       const res = await api.get('/list-directory', { params: { path } });
